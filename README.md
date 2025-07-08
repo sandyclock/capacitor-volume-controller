@@ -300,3 +300,157 @@ Test on device:
 npx cap run android
 npx cap run ios
 ```
+
+## Platform Support
+
+### 📱 Supported Devices
+
+| Platform | Support Level | Minimum Version | Features |
+|----------|---------------|-----------------|----------|
+| **Android** | ✅ Full Support | Android 6.0+ (API 23+) | All volume types, hardware buttons, real-time monitoring |
+| **iOS** | ✅ Full Support | iOS 13.0+ | Volume control, hardware buttons, audio session management |
+| **Web** | ⚠️ Development Only | All modern browsers | Mock implementation for testing |
+
+### 🏆 Android Version Compatibility
+
+| Android Version | API Level | Support Level | Features |
+|-----------------|-----------|---------------|----------|
+| Android 14+ | API 34+ | ✅ Full | All features, visual media permissions |
+| Android 13 | API 33 | ✅ Full | Granular media permissions |
+| Android 10-12 | API 29-32 | ✅ Full | Scoped storage, external volumes |
+| Android 6-9 | API 23-28 | ✅ Full | Runtime permissions, SD card access |
+| Android 5 | API 21-22 | ⚠️ Basic | Limited external storage access |
+
+### 🎯 Volume Types Support
+
+| Volume Type | Android | iOS | Description |
+|-------------|---------|-----|-------------|
+| `VolumeType.MUSIC` | ✅ | ✅ | Music, videos, games, and other media |
+| `VolumeType.SYSTEM` | ✅ | ❌ | System sounds and notifications |
+| `VolumeType.RING` | ✅ | ❌ | Phone ringtone volume |
+| `VolumeType.NOTIFICATION` | ✅ | ❌ | Notification sounds |
+| `VolumeType.ALARM` | ✅ | ❌ | Alarm clock volume |
+| `VolumeType.VOICE_CALL` | ✅ | ✅ | Voice call volume |
+| `VolumeType.DTMF` | ✅ | ❌ | DTMF tones |
+
+## API Reference
+
+### Methods
+
+#### `getVolumeLevel(options?)`
+Get the current volume level for a specific audio stream.
+
+```typescript
+getVolumeLevel({
+  type?: VolumeType;        // Volume type to get (default: 'music')
+}): Promise<VolumeResult>
+
+// Returns: { value: number } (0.0 to 1.0)
+```
+
+#### `setVolumeLevel(options)`
+Set the volume level for a specific audio stream.
+
+```typescript
+setVolumeLevel({
+  value: number;            // Volume level (0.0 to 1.0)
+  type?: VolumeType;        // Volume type to set (default: 'music')
+}): Promise<VolumeResult>
+
+// Returns: { value: number } (the new volume level)
+```
+
+#### `watchVolume(options, callback)`
+Start watching for volume changes with hardware button detection.
+
+```typescript
+watchVolume({
+  disableSystemVolumeHandler?: boolean;  // iOS: disable system UI
+  suppressVolumeIndicator?: boolean;     // Android: hide volume UI
+}, callback: VolumeChangeCallback): Promise<void>
+
+// Callback receives: { direction: 'up' | 'down', level: number }
+```
+
+#### `clearWatch()`
+Stop watching for volume changes.
+
+```typescript
+clearWatch(): Promise<void>
+```
+
+#### `isWatching()`
+Check if volume watching is currently active.
+
+```typescript
+isWatching(): Promise<WatchStatusResult>
+
+// Returns: { value: boolean }
+```
+
+### Configuration Options
+
+| Option | Platform | Description |
+|--------|----------|-------------|
+| `suppressVolumeIndicator` | Android | Hide system volume UI when changing volume |
+| `disableSystemVolumeHandler` | iOS | Disable system volume UI and intercept hardware buttons |
+| `type` | Both | Specify volume type (MUSIC, SYSTEM, RING, etc.) |
+| `value` | Both | Volume level between 0.0 and 1.0 |
+
+### Error Handling
+
+Common errors and their solutions:
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `Volume value must be between 0.0 and 1.0` | Invalid volume level | Ensure volume is between 0.0 and 1.0 |
+| `Volume watching is already active` | Multiple watch calls | Call `clearWatch()` before starting new watch |
+| `Volume slider not available` | iOS setup issue | Check audio session configuration |
+| `Failed to get volume level` | Permission or system error | Verify permissions and device compatibility |
+
+## Support This Project
+
+Help me improve this plugin and build better tools for the community!
+
+### 🤝 GitHub Sponsors
+Support through GitHub's official sponsorship program:
+- **[GitHub Sponsors](https://github.com/sponsors/odion-cloud)** - Most transparent and developer-friendly way to support
+
+### ₿ Cryptocurrency Support
+Support via crypto donations across multiple networks:
+
+| Network | Address |
+|---------|---------|
+| **Bitcoin (BTC)** | `bc1q2k0ftm2fgst22kzj683e8gpau3spfa23ttkg26` |
+| **USDT (Ethereum)** | `0xd6f4d8733c8C23e7bEC8Aeba37F4b3D2e93172d1` |
+| **USDT (BNB Chain)** | `0xd6f4d8733c8C23e7bEC8Aeba37F4b3D2e93172d1` |
+| **USDT (TRON/TRC20)** | `TXVy781mQ2tCuQ1BrattXWueUHp1wB5fwt` |
+| **USDT (Solana)** | `GZ8jmSUUzc4dQF7Cthj2atomvpBZWqccR81N9DL4o1Be` |
+| **USDT (TON)** | `UQAthXSNIlauj3SrzpDAU4VYxgEVV3niOSmeTPCtMBKGfEAE` |
+
+### 💻 Why Support?
+Your contributions help me:
+- Upgrade to better development hardware
+- Improve workspace and productivity
+- Dedicate more time to open source projects
+- Add new features faster
+- Provide better documentation and examples
+
+### 🤝 Other Ways to Help
+
+- **⭐ Star the Project** - Give us a star on [GitHub](https://github.com/odion-cloud/capacitor-volume-control) to show your support!
+- **🐛 Report Issues** - Help improve the plugin by reporting bugs and suggesting features
+- **📖 Improve Docs** - Contribute to documentation, examples, and tutorials
+- **💬 Spread the Word** - Share the plugin with other developers who might find it useful
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](https://github.com/odion-cloud/capacitor-volume-control/blob/main/CONTRIBUTING.md) for details.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/odion-cloud/capacitor-volume-control/blob/main/LICENSE) file for details.
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/odion-cloud/capacitor-volume-control/blob/main/CHANGELOG.md) for a list of changes and version history.
