@@ -28,7 +28,7 @@ class VolumeControlPlugin : Plugin() {
     @PluginMethod
     fun getVolumeLevel(call: PluginCall) {
         try {
-            val volumeType = call.getString("type", "music")
+            val volumeType = call.getString("type") ?: "music"
             val streamType = mapVolumeTypeToStreamType(volumeType)
             
             val currentVolume = audioManager.getStreamVolume(streamType)
@@ -62,7 +62,7 @@ class VolumeControlPlugin : Plugin() {
                 return
             }
             
-            val volumeType = call.getString("type", "music")
+            val volumeType = call.getString("type") ?: "music"
             val streamType = mapVolumeTypeToStreamType(volumeType)
             
             val maxVolume = audioManager.getStreamMaxVolume(streamType)
@@ -100,7 +100,7 @@ class VolumeControlPlugin : Plugin() {
             val handler = Handler(Looper.getMainLooper())
             volumeObserver = VolumeObserver(handler)
             
-            val uri = Settings.System.getUriFor(Settings.System.VOLUME_MUSIC)
+            val uri = Settings.System.getUriFor("volume_music")
             context.contentResolver.registerContentObserver(uri, true, volumeObserver!!)
             
             isWatching = true
