@@ -2,7 +2,6 @@
 release-helper.js
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build outputs
 dist/
