@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Capacitor Volume Control Plugin - Advanced Volume Control for Android & iOS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8fafc;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem 0;
+            margin-bottom: 2rem;
+            border-radius: 16px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .quick-start {
+            background: #10b981;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 1.5rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .quick-start:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 2rem;
+            background: white;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1rem;
+            color: #6b7280;
+            transition: all 0.3s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .tab.active {
+            color: #667eea;
+            background: #f0f4ff;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .tab:hover {
+            color: #667eea;
+            background: #f8fafc;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 2rem;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+            position: relative;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #374151;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .copy-btn:hover {
+            background: #4b5563;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: #eff6ff;
+            border-color: #3b82f6;
+            color: #1e40af;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            border-color: #22c55e;
+            color: #15803d;
+        }
+
+        .alert-warning {
+            background: #fefce8;
+            border-color: #eab308;
+            color: #a16207;
+        }
+
+        .method-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .method-name {
+            font-family: 'Fira Code', monospace;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .step {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            margin: 0.125rem;
+        }
+
+        .example-output {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+        }
+
+        h2 {
+            color: #1f2937;
+            margin-bottom: 1rem;
+            font-size: 1.8rem;
+        }
+
+        h3 {
+            color: #374151;
+            margin: 1.5rem 0 1rem 0;
+            font-size: 1.3rem;
+        }
+
+        h4 {
+            color: #4b5563;
+            margin: 1rem 0 0.5rem 0;
+            font-size: 1.1rem;
+        }
+
+        .highlight {
+            background: #fef3c7;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🔊 Capacitor Volume Control Plugin</h1>
+            <p class="subtitle">Advanced volume control with native Android and iOS implementations</p>
+            
+            <!-- Quick Links -->
+            <div style="margin: 1.5rem 0; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <a href="https://github.com/odion-cloud/capacitor-volume-control" target="_blank" 
+                   style="background: #333; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <span>⭐</span> GitHub
+                </a>
+                <a href="https://www.npmjs.com/package/@odion-cloud/capacitor-volume-control" target="_blank"
+                   style="background: #cb3837; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <span>📦</span> npm
+                </a>
+            </div>
+            
+            <a href="#installation" class="quick-start" onclick="showTab('setup')">Get Started Now →</a>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('support')">Support</button>
+            <button class="tab" onclick="showTab('overview')">Overview</button>
+            <button class="tab" onclick="showTab('setup')">Setup</button>
+            <button class="tab" onclick="showTab('usage')">Usage</button>
+            <button class="tab" onclick="showTab('examples')">Examples</button>
+            <button class="tab" onclick="showTab('api')">API</button>
+        </div>
+
+        <!-- Support Tab -->
+        <div id="support" class="tab-content active">
+            <h2>Device Support & Platform Compatibility</h2>
+
+            <h3>📱 Supported Devices</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h4>Android Devices</h4>
+                    <p><strong>Full Support</strong></p>
+                    <ul>
+                        <li>Android 6.0+ (API 23+)</li>
+                        <li>All phone manufacturers</li>
+                        <li>Tablets and foldables</li>
+                        <li>Internal & SD card storage</li>
+                        <li>All media types supported</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🍎</div>
+                    <h4>iOS Devices</h4>
+                    <p><strong>Coming Soon</strong></p>
+                    <ul>
+                        <li>iPhone iOS 12+</li>
+                        <li>iPad iPadOS 13+</li>
+                        <li>Photos & Videos access</li>
+                        <li>Music library integration</li>
+                        <li>Expected Q2 2025</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h4>Web Platform</h4>
+                    <p><strong>Development Only</strong></p>
+                    <ul>
+                        <li>Chrome, Firefox, Safari</li>
+                        <li>Mock data for testing</li>
+                        <li>No real file access</li>
+                        <li>Development fallback</li>
+                        <li>Not for production</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="alert alert-success">
+                <strong>📱 iOS Support Coming Soon!</strong> We're actively working on iOS support with full Photos framework integration.
+            </div>
+
+            <h3>🏆 Android Version Compatibility</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Android Version</th>
+                        <th>API Level</th>
+                        <th>Support Level</th>
+                        <th>Features</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Android 14+</td>
+                        <td>API 34+</td>
+                        <td><span class="badge">✅ Full</span></td>
+                        <td>All features, visual media permissions</td>
+                    </tr>
+                    <tr>
+                        <td>Android 13</td>
+                        <td>API 33</td>
+                        <td><span class="badge">✅ Full</span></td>
+                        <td>Granular media permissions</td>
+                    </tr>
+                    <tr>
+                        <td>Android 10-12</td>
+                        <td>API 29-32</td>
+                        <td><span class="badge">✅ Full</span></td>
+                        <td>Scoped storage, external volumes</td>
+                    </tr>
+                    <tr>
+                        <td>Android 6-9</td>
+                        <td>API 23-28</td>
+                        <td><span class="badge">✅ Full</span></td>
+                        <td>Runtime permissions, SD card access</td>
+                    </tr>
+                    <tr>
+                        <td>Android 5</td>
+                        <td>API 21-22</td>
+                        <td><span class="badge">⚠️ Basic</span></td>
+                        <td>Limited external storage access</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>💝 Support This Project</h3>
+            <p>Help me improve this plugin and build better tools for the community!</p>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤝</div>
+                    <h4>GitHub Sponsors</h4>
+                    <p>Support through GitHub's official sponsorship program:</p>
+                    <ul>
+                        <li><strong>GitHub Sponsors:</strong><br><a href="https://github.com/sponsors/odion-cloud" target="_blank">github.com/sponsors/odion-cloud</a></li>
+                    </ul>
+                    <div class="alert alert-info" style="margin-top: 1rem;">
+                        <strong>💡 Recommended:</strong> GitHub Sponsors offers the most transparent and developer-friendly way to support open source projects.
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">₿</div>
+                    <h4>Cryptocurrency Support</h4>
+                    <p>Support via crypto donations across multiple networks:</p>
+                    <ul>
+                        <li><strong>Bitcoin (BTC):</strong><br><code style="font-size: 0.8rem;">bc1q2k0ftm2fgst22kzj683e8gpau3spfa23ttkg26</code></li>
+                        <li><strong>USDT (Ethereum):</strong><br><code style="font-size: 0.8rem;">0xd6f4d8733c8C23e7bEC8Aeba37F4b3D2e93172d1</code></li>
+                        <li><strong>USDT (BNB Chain):</strong><br><code style="font-size: 0.8rem;">0xd6f4d8733c8C23e7bEC8Aeba37F4b3D2e93172d1</code></li>
+                        <li><strong>USDT (TRON/TRC20):</strong><br><code style="font-size: 0.8rem;">TXVy781mQ2tCuQ1BrattXWueUHp1wB5fwt</code></li>
+                        <li><strong>USDT (Solana):</strong><br><code style="font-size: 0.8rem;">GZ8jmSUUzc4dQF7Cthj2atomvpBZWqccR81N9DL4o1Be</code></li>
+                        <li><strong>USDT (TON):</strong><br><code style="font-size: 0.8rem;">UQAthXSNIlauj3SrzpDAU4VYxgEVV3niOSmeTPCtMBKGfEAE</code></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <strong>💻 Why Support?</strong> Your contributions help me:
+                <ul style="margin: 0.5rem 0;">
+                    <li>Upgrade to better development hardware</li>
+                    <li>Improve my workspace and productivity</li>
+                    <li>Dedicate more time to open source projects</li>
+                    <li>Add iOS support and new features faster</li>
+                    <li>Provide better documentation and examples</li>
+                </ul>
+            </div>
+
+            <h3>🤝 Other Ways to Help</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>⭐ Star the Project</h4>
+                    <p>Give us a star on <a href="https://github.com/odion-cloud/capacitor-volume-control" target="_blank">GitHub</a> to show your support!</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🐛 Report Issues</h4>
+                    <p>Help improve the plugin by reporting bugs and suggesting features.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📖 Improve Docs</h4>
+                    <p>Contribute to documentation, examples, and tutorials.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>💬 Spread the Word</h4>
+                    <p>Share the plugin with other developers who might find it useful.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content">
+            <h2>What This Plugin Does</h2>
+            <p>Advanced volume control for Capacitor apps with native Android and iOS implementations. Perfect for building music players, audio apps, and any application that needs precise volume management.</p>
+
+            <!-- Quick Links -->
+            <div class="alert alert-info" style="margin: 1.5rem 0;">
+                <strong>📚 Quick Links:</strong>
+                <div style="display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <a href="https://github.com/odion-cloud/capacitor-volume-control" target="_blank" style="color: #1e40af; text-decoration: none; font-weight: 600;">
+                        ⭐ View on GitHub
+                    </a>
+                    <a href="https://www.npmjs.com/package/@odion-cloud/capacitor-volume-control" target="_blank" style="color: #1e40af; text-decoration: none; font-weight: 600;">
+                        📦 npm Package
+                    </a>
+                    <span style="color: #6b7280;">•</span>
+                    <code style="background: #f3f4f6; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.9rem;">npm install @odion-cloud/capacitor-volume-control</code>
+                </div>
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔊</div>
+                    <h4>Volume Level Control</h4>
+                    <p>Get and set volume levels for different audio streams with precise 0.0-1.0 range control.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👂</div>
+                    <h4>Volume Change Monitoring</h4>
+                    <p>Watch for volume changes in real-time with hardware button detection and callbacks.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h4>Platform-Specific Features</h4>
+                    <p>Android: Suppress volume indicator. iOS: Disable system volume handler.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h4>Fast & Reliable</h4>
+                    <p>Uses native Android AudioManager and iOS AVAudioSession for optimal performance.</p>
+                </div>
+            </div>
+
+                         <div class="alert alert-success">
+                 <strong>Works with all platforms!</strong> Full support for Android 6.0+ and iOS 13.0+ with native implementations.
+             </div>
+
+             <div class="alert alert-info">
+                 <strong>🔊 Real-time Volume Control!</strong> Monitor volume changes and control audio levels with hardware button support.
+             </div>
+
+            <h3>Quick Example</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>// Get current volume and set it to 50%
+const currentVolume = await VolumeControl.getVolumeLevel();
+console.log('Current volume:', currentVolume.value);
+
+await VolumeControl.setVolumeLevel({ value: 0.5 });
+
+// Watch for volume changes
+await VolumeControl.watchVolume({
+  suppressVolumeIndicator: true
+}, (event) => {
+  console.log('Volume changed:', event.direction, event.level);
+});</pre>
+            </div>
+        </div>
+
+        <!-- Setup Tab -->
+        <div id="setup" class="tab-content">
+            <h2>Getting Started</h2>
+
+            <div class="step">
+                <h3><span class="step-number">1</span>Install the Plugin</h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    <pre>npm install @odion-cloud/capacitor-volume-control
+npx cap sync</pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <h3><span class="step-number">2</span>Android Setup (Optional)</h3>
+                <p>For advanced volume control features, add to <span class="highlight">android/app/src/main/AndroidManifest.xml</span>:</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    <pre>&lt;!-- For volume control features --&gt;
+&lt;uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" /&gt;</pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <h3><span class="step-number">3</span>iOS Setup (Optional)</h3>
+                <p>For iOS volume control features, add to <span class="highlight">ios/App/App/Info.plist</span>:</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    <pre>&lt;key&gt;NSMicrophoneUsageDescription&lt;/key&gt;
+&lt;string&gt;This app needs access to control audio volume&lt;/string&gt;</pre>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <strong>That's it!</strong> The plugin works out of the box. Permissions are optional and only needed for advanced features.
+            </div>
+        </div>
+
+        <!-- Usage Tab -->
+        <div id="usage" class="tab-content">
+            <h2>How to Use</h2>
+
+            <h3>1. Import the Plugin</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>import { VolumeControl } from '@odion-cloud/capacitor-volume-control';</pre>
+            </div>
+
+            <h3>2. Get Current Volume</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>// Get current volume level (0.0 to 1.0)
+const currentVolume = await VolumeControl.getVolumeLevel();
+console.log('Current volume:', currentVolume.value);
+
+// Get specific volume type
+const musicVolume = await VolumeControl.getVolumeLevel({
+  type: 'music'
+});</pre>
+            </div>
+
+            <h3>3. Set Volume Level</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>// Set volume to 50%
+await VolumeControl.setVolumeLevel({ value: 0.5 });
+
+// Set specific volume type
+await VolumeControl.setVolumeLevel({
+  value: 0.8,
+  type: 'system'
+});</pre>
+            </div>
+
+            <h3>4. Watch Volume Changes</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>// Start watching volume changes
+await VolumeControl.watchVolume({
+  suppressVolumeIndicator: true,    // Android: hide volume UI
+  disableSystemVolumeHandler: true  // iOS: disable system UI
+}, (event) => {
+  console.log('Volume changed:', event.direction, event.level);
+});
+
+// Stop watching
+await VolumeControl.clearWatch();
+
+// Check if watching
+const isWatching = await VolumeControl.isWatching();
+console.log('Is watching:', isWatching.value);</pre>
+            </div>
+
+            <div class="alert alert-warning">
+                <strong>Remember:</strong> Volume values must be between 0.0 and 1.0. The plugin will throw an error for invalid values.
+            </div>
+        </div>
+
+        <!-- Examples Tab -->
+        <div id="examples" class="tab-content">
+            <h2>Real-World Examples</h2>
+
+            <h3>🎵 Music Player App</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>class MusicPlayer {
+  constructor() {
+    this.isWatching = false;
+  }
+
+  async initialize() {
+    // Get current volume
+    const volume = await VolumeControl.getVolumeLevel();
+    this.currentVolume = volume.value;
+    
+    // Start watching volume changes
+    await this.startVolumeWatching();
+  }
+
+  async startVolumeWatching() {
+    if (this.isWatching) return;
+    
+    await VolumeControl.watchVolume({
+      suppressVolumeIndicator: true
+    }, (event) => {
+      this.handleVolumeChange(event);
+    });
+    
+    this.isWatching = true;
+  }
+
+  handleVolumeChange(event) {
+    this.currentVolume = event.level;
+    console.log(`Volume ${event.direction}: ${event.level}`);
+    
+    // Update UI or trigger other actions
+    this.updateVolumeDisplay(event.level);
+  }
+
+  async setVolume(level) {
+    await VolumeControl.setVolumeLevel({ value: level });
+    this.currentVolume = level;
+  }
+}</pre>
+            </div>
+
+            <div class="example-output">
+                <strong>Output:</strong><br>
+                Volume up: 0.75<br>
+                Volume down: 0.6<br>
+                Current volume: 0.6
+            </div>
+
+            <h3>🔊 Audio Mixer App</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>class AudioMixer {
+  constructor() {
+    this.volumeLevels = {
+      music: 0.5,
+      notification: 0.3,
+      system: 0.7
+    };
+  }
+
+  async setMusicVolume(level) {
+    await VolumeControl.setVolumeLevel({
+      value: level,
+      type: 'music'
+    });
+    this.volumeLevels.music = level;
+  }
+
+  async setNotificationVolume(level) {
+    await VolumeControl.setVolumeLevel({
+      value: level,
+      type: 'notification'
+    });
+    this.volumeLevels.notification = level;
+  }
+
+  async getCurrentLevels() {
+    const music = await VolumeControl.getVolumeLevel({ type: 'music' });
+    const notification = await VolumeControl.getVolumeLevel({ type: 'notification' });
+    const system = await VolumeControl.getVolumeLevel({ type: 'system' });
+    
+    return {
+      music: music.value,
+      notification: notification.value,
+      system: system.value
+    };
+  }
+}</pre>
+            </div>
+
+            <div class="example-output">
+                <strong>Output:</strong><br>
+                Music volume: 0.5<br>
+                Notification volume: 0.3<br>
+                System volume: 0.7
+            </div>
+
+            <h3>🎮 Game Volume Control</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>class GameVolumeManager {
+  constructor() {
+    this.isMuted = false;
+    this.previousVolume = 0.5;
+  }
+
+  async initialize() {
+    // Get current volume
+    const volume = await VolumeControl.getVolumeLevel();
+    this.previousVolume = volume.value;
+    
+    // Start watching for volume changes
+    await VolumeControl.watchVolume({
+      disableSystemVolumeHandler: true
+    }, (event) => {
+      this.handleGameVolumeChange(event);
+    });
+  }
+
+  handleGameVolumeChange(event) {
+    if (this.isMuted) {
+      // If muted, restore previous volume
+      VolumeControl.setVolumeLevel({ value: this.previousVolume });
+    } else {
+      // Update previous volume
+      this.previousVolume = event.level;
+    }
+  }
+
+  async mute() {
+    this.isMuted = true;
+    await VolumeControl.setVolumeLevel({ value: 0 });
+  }
+
+  async unmute() {
+    this.isMuted = false;
+    await VolumeControl.setVolumeLevel({ value: this.previousVolume });
+  }
+}</pre>
+            </div>
+
+            <div class="example-output">
+                <strong>Output:</strong><br>
+                Game muted: Volume set to 0<br>
+                Game unmuted: Volume restored to 0.5<br>
+                Volume change detected: 0.6
+            </div>
+
+            <h3>📱 React Hook Example</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>import { useEffect, useState } from 'react';
+import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+
+export function useVolumeControl() {
+  const [volume, setVolume] = useState(0.5);
+  const [isWatching, setIsWatching] = useState(false);
+
+  useEffect(() => {
+    // Get initial volume
+    VolumeControl.getVolumeLevel().then(result => {
+      setVolume(result.value);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      VolumeControl.clearWatch();
+    };
+  }, []);
+
+  const startWatching = async () => {
+    if (isWatching) return;
+
+    try {
+      await VolumeControl.watchVolume({
+        disableSystemVolumeHandler: true,
+        suppressVolumeIndicator: true
+      }, (event) => {
+        setVolume(event.level);
+      });
+      
+      setIsWatching(true);
+    } catch (error) {
+      console.error('Failed to start watching:', error);
+    }
+  };
+
+  const stopWatching = async () => {
+    try {
+      await VolumeControl.clearWatch();
+      setIsWatching(false);
+    } catch (error) {
+      console.error('Failed to stop watching:', error);
+    }
+  };
+
+  const setVolumeLevel = async (value) => {
+    try {
+      await VolumeControl.setVolumeLevel({ value });
+      setVolume(value);
+    } catch (error) {
+      console.error('Failed to set volume:', error);
+    }
+  };
+
+  return {
+    volume,
+    isWatching,
+    startWatching,
+    stopWatching,
+    setVolumeLevel
+  };
+}</pre>
+            </div>
+
+            <div class="example-output">
+                <strong>Output:</strong><br>
+                Initial volume: 0.5<br>
+                Volume watching started<br>
+                Volume changed: 0.7<br>
+                Volume set to: 0.8
+            </div>
+        </div>
+
+        <!-- API Tab -->
+        <div id="api" class="tab-content">
+            <h2>Complete API Reference</h2>
+
+            <div class="method-card">
+                <div class="method-name">getVolumeLevel(options?)</div>
+                <p>Get the current volume level for a specific audio stream.</p>
+                <div class="code-block">
+                    <pre>getVolumeLevel({
+  type?: VolumeType;        // Volume type to get (default: 'music')
+}): Promise&lt;VolumeResult&gt;
+
+// Returns: { value: number } (0.0 to 1.0)</pre>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <div class="method-name">setVolumeLevel(options)</div>
+                <p>Set the volume level for a specific audio stream.</p>
+                <div class="code-block">
+                    <pre>setVolumeLevel({
+  value: number;            // Volume level (0.0 to 1.0)
+  type?: VolumeType;        // Volume type to set (default: 'music')
+}): Promise&lt;VolumeResult&gt;
+
+// Returns: { value: number } (the new volume level)</pre>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <div class="method-name">watchVolume(options, callback)</div>
+                <p>Start watching for volume changes with hardware button detection.</p>
+                <div class="code-block">
+                    <pre>watchVolume({
+  disableSystemVolumeHandler?: boolean;  // iOS: disable system UI
+  suppressVolumeIndicator?: boolean;     // Android: hide volume UI
+}, callback: VolumeChangeCallback): Promise&lt;void&gt;
+
+// Callback receives: { direction: 'up' | 'down', level: number }</pre>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <div class="method-name">clearWatch()</div>
+                <p>Stop watching for volume changes.</p>
+                <div class="code-block">
+                    <pre>clearWatch(): Promise&lt;void&gt;</pre>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <div class="method-name">isWatching()</div>
+                <p>Check if volume watching is currently active.</p>
+                <div class="code-block">
+                    <pre>isWatching(): Promise&lt;WatchStatusResult&gt;
+
+// Returns: { value: boolean }</pre>
+                </div>
+            </div>
+
+            <h3>Volume Types</h3>
+            <p>Supported volume types for Android and iOS:</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Volume Type</th>
+                        <th>Description</th>
+                        <th>Platform</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>VolumeType.MUSIC</code></td>
+                        <td>Music, videos, games, and other media</td>
+                        <td>Android, iOS</td>
+                    </tr>
+                    <tr>
+                        <td><code>VolumeType.SYSTEM</code></td>
+                        <td>System sounds and notifications</td>
+                        <td>Android</td>
+                    </tr>
+                    <tr>
+                        <td><code>VolumeType.RING</code></td>
+                        <td>Phone ringtone volume</td>
+                        <td>Android</td>
+                    </tr>
+                    <tr>
+                        <td><code>VolumeType.NOTIFICATION</code></td>
+                        <td>Notification sounds</td>
+                        <td>Android</td>
+                    </tr>
+                    <tr>
+                        <td><code>VolumeType.ALARM</code></td>
+                        <td>Alarm clock volume</td>
+                        <td>Android</td>
+                    </tr>
+                    <tr>
+                        <td><code>VolumeType.VOICE_CALL</code></td>
+                        <td>Voice call volume</td>
+                        <td>Android, iOS</td>
+                    </tr>
+                    <tr>
+                        <td><code>VolumeType.DTMF</code></td>
+                        <td>DTMF tones</td>
+                        <td>Android</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Configuration Options</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Android Options</h4>
+                    <ul>
+                        <li><code>suppressVolumeIndicator</code> - Hide system volume UI</li>
+                        <li><code>type</code> - Control specific volume streams</li>
+                        <li>Hardware button detection</li>
+                        <li>Real-time volume monitoring</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h4>iOS Options</h4>
+                    <ul>
+                        <li><code>disableSystemVolumeHandler</code> - Disable system UI</li>
+                        <li><code>type</code> - Control voice call volume</li>
+                        <li>Volume button interception</li>
+                        <li>Audio session management</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h4>Cross-Platform</h4>
+                    <ul>
+                        <li><code>value</code> - Volume level (0.0-1.0)</li>
+                        <li><code>type</code> - Volume type selection</li>
+                        <li>Error handling</li>
+                        <li>TypeScript support</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h4>Event Handling</h4>
+                    <ul>
+                        <li><code>direction</code> - 'up' or 'down'</li>
+                        <li><code>level</code> - New volume level</li>
+                        <li>Real-time callbacks</li>
+                        <li>Multiple listeners support</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>Error Handling</h3>
+            <div class="alert alert-warning">
+                <strong>Common Errors:</strong>
+                <ul style="margin-top: 0.5rem;">
+                    <li><code>Volume value must be between 0.0 and 1.0</code> - Invalid volume level</li>
+                    <li><code>Volume watching is already active</code> - Multiple watch calls</li>
+                    <li><code>Volume slider not available</code> - iOS setup issue</li>
+                    <li><code>Failed to get volume level</code> - Permission or system error</li>
+                </ul>
+            </div>
+        </div>
+        </div>
+
+
+    </div>
+
+    <script>
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            const code = codeBlock.textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'Copied!';
+                button.style.background = '#10b981';
+                
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                    button.style.background = '#374151';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+
+</html>

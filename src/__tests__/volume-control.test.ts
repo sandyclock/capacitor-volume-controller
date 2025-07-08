@@ -1,0 +1,110 @@
+import { VolumeControlWeb } from '../web';
+import { VolumeType } from '../definitions';
+
+describe('VolumeControlWeb', () => {
+  let volumeControl: VolumeControlWeb;
+
+  beforeEach(() => {
+    volumeControl = new VolumeControlWeb();
+  });
+
+  afterEach(() => {
+    // Clean up any active watches
+    volumeControl.clearWatch();
+  });
+
+  describe('getVolumeLevel', () => {
+    it('should return a volume level between 0 and 1', async () => {
+      const result = await volumeControl.getVolumeLevel();
+      expect(result.value).toBeGreaterThanOrEqual(0);
+      expect(result.value).toBeLessThanOrEqual(1);
+    });
+
+    it('should handle volume type parameter', async () => {
+      const result = await volumeControl.getVolumeLevel({ type: VolumeType.MUSIC });
+      expect(result.value).toBeDefined();
+    });
+  });
+
+  describe('setVolumeLevel', () => {
+    it('should accept valid volume values', async () => {
+      const result = await volumeControl.setVolumeLevel({ value: 0.5 });
+      expect(result.value).toBe(0.5);
+    });
+
+    it('should reject volume values below 0', async () => {
+      await expect(volumeControl.setVolumeLevel({ value: -0.1 })).rejects.toThrow();
+    });
+
+    it('should reject volume values above 1', async () => {
+      await expect(volumeControl.setVolumeLevel({ value: 1.1 })).rejects.toThrow();
+    });
+
+    it('should handle volume type parameter', async () => {
+      const result = await volumeControl.setVolumeLevel({ 
+        value: 0.7, 
+        type: VolumeType.SYSTEM 
+      });
+      expect(result.value).toBe(0.7);
+    });
+  });
+
+  describe('watchVolume', () => {
+    it('should start watching volume changes', async () => {
+      const callback = jest.fn();
+      
+      await volumeControl.watchVolume({}, callback);
+      
+      const watchStatus = await volumeControl.isWatching();
+      expect(watchStatus.value).toBe(true);
+    });
+
+    it('should reject if already watching', async () => {
+      const callback = jest.fn();
+      
+      await volumeControl.watchVolume({}, callback);
+      
+      await expect(volumeControl.watchVolume({}, callback)).rejects.toThrow();
+    });
+
+    it('should handle watch options', async () => {
+      const callback = jest.fn();
+      
+      await volumeControl.watchVolume({
+        disableSystemVolumeHandler: true,
+        suppressVolumeIndicator: true
+      }, callback);
+      
+      const watchStatus = await volumeControl.isWatching();
+      expect(watchStatus.value).toBe(true);
+    });
+  });
+
+  describe('clearWatch', () => {
+    it('should clear volume watch', async () => {
+      const callback = jest.fn();
+      
+      await volumeControl.watchVolume({}, callback);
+      await volumeControl.clearWatch();
+      
+      const watchStatus = await volumeControl.isWatching();
+      expect(watchStatus.value).toBe(false);
+    });
+  });
+
+  describe('isWatching', () => {
+    it('should return false initially', async () => {
+      const watchStatus = await volumeControl.isWatching();
+      expect(watchStatus.value).toBe(false);
+    });
+
+    it('should return true when watching', async () => {
+      const callback = jest.fn();
+      
+      await volumeControl.watchVolume({}, callback);
+      
+      const watchStatus = await volumeControl.isWatching();
+      expect(watchStatus.value).toBe(true);
+    });
+  });
+});
