@@ -3,7 +3,6 @@ package com.yourcompany.plugins.volumecontrol
 import android.content.Context
 import android.media.AudioManager
 import android.view.KeyEvent
-import android.view.View
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -12,24 +11,28 @@ import com.getcapacitor.annotation.CapacitorPlugin
 
 @CapacitorPlugin(name = "VolumeControl")
 class VolumeControlPlugin : Plugin() {
-    
-    private lateinit var audioManager: AudioManager
-    private var savedCall: PluginCall? = null
+    private var audioManager: AudioManager? = null
+    private var streamType = AudioManager.STREAM_MUSIC
     private var isStarted = false
+    private var savedCall: PluginCall? = null
     private var suppressVolumeIndicator = false
-    
+
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
-    
+
+    @PluginMethod
+    fun isWatching(call: PluginCall) {
+        val ret = JSObject()
+        ret.put("value", isStarted)
+        call.resolve(ret)
+    }
+
     @PluginMethod
     fun getVolumeLevel(call: PluginCall) {
         try {
-            val streamType = getStreamType(call.data)
-            val currentVolume = audioManager.getStreamVolume(streamType)
-            val maxVolume = audioManager.getStreamMaxVolume(streamType)
-            
-            // Normalize volume to 0-1 range
+            val maxVolume = audioManager?.getStreamMaxVolume(streamType) ?: 15
+            val currentVolume = audioManager?.getStreamVolume(streamType) ?: 0
             val normalizedVolume = currentVolume.toFloat() / maxVolume.toFloat()
             
             val ret = JSObject()
@@ -39,22 +42,25 @@ class VolumeControlPlugin : Plugin() {
             call.reject("Failed to get volume level", e)
         }
     }
-    
+
     @PluginMethod
     fun setVolumeLevel(call: PluginCall) {
         try {
-            val value = call.getFloat("value")
-            if (value < 0 || value > 1) {
-                call.reject("Volume value must be between 0 and 1")
+            val value = call.getFloat("value") ?: run {
+                call.reject("Missing required parameter: value")
                 return
             }
 
-            val streamType = getStreamType(call.data)
-            val maxVolume = audioManager.getStreamMaxVolume(streamType)
-            val targetVolumeLevel = (value * maxVolume).toInt()
+            if (value < 0f || value > 1f) {
+                call.reject("Volume value must be between 0.0 and 1.0")
+                return
+            }
+
+            val maxVolume = audioManager?.getStreamMaxVolume(streamType) ?: 15
+            val targetVolume = (value * maxVolume).toInt()
             
-            // Use 0 for flags to avoid showing the UI
-            audioManager.setStreamVolume(streamType, targetVolumeLevel, 0)
+            val flags = if (suppressVolumeIndicator) 0 else AudioManager.FLAG_SHOW_UI
+            audioManager?.setStreamVolume(streamType, targetVolume, flags)
             
             val ret = JSObject()
             ret.put("value", value)
@@ -63,73 +69,46 @@ class VolumeControlPlugin : Plugin() {
             call.reject("Failed to set volume level", e)
         }
     }
-    
-    @PluginMethod(returnType = PluginMethod.RETURN_PROMISE)
-    fun isWatching(call: PluginCall) {
-        val ret = JSObject()
-        ret.put("value", isStarted)
-        call.resolve(ret)
-    }
-    
+
     @PluginMethod(returnType = PluginMethod.RETURN_CALLBACK)
     fun watchVolume(call: PluginCall) {
         if (isStarted) {
             call.reject("Volume buttons has already been watched")
             return
         }
-        
+
         suppressVolumeIndicator = call.getBoolean("suppressVolumeIndicator", false) ?: false
         
         call.setKeepAlive(true)
         savedCall = call
         
-        bridge.webView.setOnKeyListener(
-            object : View.OnKeyListener {
-                override fun onKey(v: View?, keyCode: Int, event: KeyEvent?): Boolean {
-                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                        val isKeyUp = event?.action == KeyEvent.ACTION_UP
-                        if (isKeyUp) {
-                            val ret = JSObject()
-                            ret.put("direction", if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
-                            call.resolve(ret)
-                        }
-                        // Return suppressVolumeIndicator value for volume buttons event actions only
-                        // When suppressVolumeIndicator is true, the system volume indicator will not be displayed
-                        return suppressVolumeIndicator
-                    }
-                    return false
+        bridge.webView.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    val ret = JSObject()
+                    ret.put("direction", if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
+                    call.resolve(ret)
                 }
+                return@setOnKeyListener suppressVolumeIndicator
             }
-        )
-        
+            false
+        }
+
         isStarted = true
     }
-    
-    @PluginMethod(returnType = PluginMethod.RETURN_PROMISE)
+
+    @PluginMethod
     fun clearWatch(call: PluginCall) {
         if (!isStarted) {
             call.reject("Volume buttons has not been watched")
             return
         }
-        
+
         bridge.webView.setOnKeyListener(null)
-        
-        if (savedCall != null) {
-            bridge.releaseCall(savedCall!!)
-            savedCall = null
-        }
-        
+        savedCall?.let { bridge.releaseCall(it) }
+        savedCall = null
         isStarted = false
+        
         call.resolve()
-    }
-    
-    private fun getStreamType(data: JSObject): Int {
-        val type = data.getString("type", "music")
-        return when (type.toLowerCase()) {
-            "music" -> AudioManager.STREAM_MUSIC
-            "notification" -> AudioManager.STREAM_NOTIFICATION
-            "system" -> AudioManager.STREAM_SYSTEM
-            else -> AudioManager.STREAM_MUSIC
-        }
     }
 }

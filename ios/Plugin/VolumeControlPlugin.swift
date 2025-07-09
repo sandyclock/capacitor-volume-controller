@@ -26,9 +26,10 @@ public class VolumeControlPlugin: CAPPlugin {
     }
     
     @objc func getVolumeLevel(_ call: CAPPluginCall) {
+        let volumeType = call.getString("type") ?? "music"
+        
         do {
-            // Always get fresh volume from audio session
-            let volume = AVAudioSession.sharedInstance().outputVolume
+            let volume = try getCurrentVolume(for: volumeType)
             call.resolve(["value": volume])
         } catch {
             call.reject("Failed to get volume level: \(error.localizedDescription)")
@@ -46,8 +47,10 @@ public class VolumeControlPlugin: CAPPlugin {
             return
         }
         
+        let volumeType = call.getString("type") ?? "music"
+        
         do {
-            try setVolume(value)
+            try setVolume(value, for: volumeType)
             call.resolve(["value": value])
         } catch {
             call.reject("Failed to set volume level: \(error.localizedDescription)")
@@ -95,7 +98,16 @@ public class VolumeControlPlugin: CAPPlugin {
     
     // MARK: - Private Methods
     
-    private func setVolume(_ volume: Float) throws {
+    private func getCurrentVolume(for volumeType: String) throws -> Float {
+        // Return tracked volume if available, otherwise get from audio session
+        if isStarted {
+            return currentVolume
+        }
+        let audioSession = AVAudioSession.sharedInstance()
+        return audioSession.outputVolume
+    }
+    
+    private func setVolume(_ volume: Float, for volumeType: String) throws {
         guard let volumeSlider = volumeHandler.volumeSlider else {
             throw NSError(domain: "VolumeControl", code: 1, userInfo: [NSLocalizedDescriptionKey: "Volume slider not available"])
         }
@@ -175,6 +187,12 @@ public class VolumeControlHandler: NSObject {
         self.setupSession()
         volumeView?.isHidden = false
         self.disableSystemVolumeHandler = disableSystemVolumeHandler
+        
+        // Start observing volume changes
+        observation = volumeSlider?.observe(\.value, options: [.new]) { [weak self] slider, change in
+            guard let self = self, let newValue = change.newValue else { return }
+            self.currentVolume = newValue
+        }
     }
     
     public func stopHandler() {
