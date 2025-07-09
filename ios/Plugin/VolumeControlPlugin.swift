@@ -16,6 +16,8 @@ public class VolumeControlPlugin: CAPPlugin {
     private var disableSystemVolumeHandler = false
     private var previousVolume: Float = 0.5
     private var volumeObserver: NSObjectProtocol?
+    private var isSettingVolume = false
+    private var targetVolume: Float = -1
     
     public override func load() {
         setupAudioSession()
@@ -53,9 +55,22 @@ public class VolumeControlPlugin: CAPPlugin {
         let volumeType = call.getString("type") ?? "music"
         
         do {
+            // Set flag to prevent observer from triggering during programmatic changes
+            isSettingVolume = true
+            targetVolume = value
+            
             try setVolume(value, for: volumeType)
+            
+            // Reset flag after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.isSettingVolume = false
+                self.targetVolume = -1
+            }
+            
             call.resolve(["value": value])
         } catch {
+            isSettingVolume = false
+            targetVolume = -1
             call.reject("Failed to set volume level: \(error.localizedDescription)")
         }
     }
@@ -67,6 +82,8 @@ public class VolumeControlPlugin: CAPPlugin {
         }
         
         disableSystemVolumeHandler = call.getBool("disableSystemVolumeHandler") ?? false
+        
+        print("VolumeControl: Starting volume watching with disableSystemVolumeHandler: \(disableSystemVolumeHandler)")
         
         do {
             try startVolumeWatching()
@@ -90,10 +107,11 @@ public class VolumeControlPlugin: CAPPlugin {
     private func setupAudioSession() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try audioSession.setActive(true)
+            print("VolumeControl: Audio session setup successful")
         } catch {
-            print("Failed to setup audio session: \(error)")
+            print("VolumeControl: Failed to setup audio session: \(error)")
         }
     }
     
@@ -101,7 +119,7 @@ public class VolumeControlPlugin: CAPPlugin {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            self.volumeView = MPVolumeView(frame: CGRect(x: -1000, y: -1000, width: 100, height: 100))
+            self.volumeView = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 1, height: 1))
             
             if let volumeView = self.volumeView {
                 // Add to a view that exists
@@ -112,30 +130,31 @@ public class VolumeControlPlugin: CAPPlugin {
                 volumeView.isHidden = true
                 volumeView.showsVolumeSlider = true
                 volumeView.showsRouteButton = false
+                volumeView.alpha = 0.01
                 
-                // Find the volume slider with a delay to ensure it's created
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.findVolumeSlider()
-                }
+                // Find the volume slider with multiple attempts
+                self.findVolumeSlider(attempts: 0)
             }
         }
     }
     
-    private func findVolumeSlider() {
-        guard let volumeView = volumeView else { return }
+    private func findVolumeSlider(attempts: Int) {
+        guard let volumeView = volumeView, attempts < 10 else { 
+            print("VolumeControl: Failed to find volume slider after \(attempts) attempts")
+            return 
+        }
         
         for view in volumeView.subviews {
             if let slider = view as? UISlider {
                 volumeSlider = slider
-                break
+                print("VolumeControl: Volume slider found after \(attempts + 1) attempts")
+                return
             }
         }
         
         // If not found, try again after a short delay
-        if volumeSlider == nil {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.findVolumeSlider()
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.findVolumeSlider(attempts: attempts + 1)
         }
     }
     
@@ -158,6 +177,7 @@ public class VolumeControlPlugin: CAPPlugin {
     private func startVolumeWatching() throws {
         // Initialize previous volume
         previousVolume = AVAudioSession.sharedInstance().outputVolume
+        print("VolumeControl: Initial volume: \(previousVolume)")
         
         // Set up volume observation
         volumeObserver = NotificationCenter.default.addObserver(
@@ -174,21 +194,28 @@ public class VolumeControlPlugin: CAPPlugin {
         if disableSystemVolumeHandler {
             setupVolumeButtonInterception()
         }
+        
+        print("VolumeControl: Volume watching started successfully")
     }
     
     private func stopVolumeWatching() {
         clearVolumeObserver()
         isWatching = false
         disableSystemVolumeHandler = false
+        isSettingVolume = false
+        targetVolume = -1
         
         // Restore system volume behavior
         restoreSystemVolume()
+        
+        print("VolumeControl: Volume watching stopped")
     }
     
     private func clearVolumeObserver() {
         if let observer = volumeObserver {
             NotificationCenter.default.removeObserver(observer)
             volumeObserver = nil
+            print("VolumeControl: Volume observer removed")
         }
     }
     
@@ -196,8 +223,9 @@ public class VolumeControlPlugin: CAPPlugin {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let volumeView = self.volumeView else { return }
             volumeView.isHidden = false
-            volumeView.alpha = 0.01
-            volumeView.frame = CGRect(x: -1000, y: -1000, width: 100, height: 100)
+            volumeView.alpha = 0.001 // Very low but not zero
+            volumeView.frame = CGRect(x: -2000, y: -2000, width: 1, height: 1)
+            print("VolumeControl: Volume button interception enabled")
         }
     }
     
@@ -205,32 +233,47 @@ public class VolumeControlPlugin: CAPPlugin {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let volumeView = self.volumeView else { return }
             volumeView.isHidden = true
-            volumeView.alpha = 1.0
+            volumeView.alpha = 0.01
+            print("VolumeControl: System volume behavior restored")
         }
     }
     
     private func handleVolumeChange(_ notification: Notification) {
+        // Skip if we're currently setting volume programmatically
+        if isSettingVolume {
+            print("VolumeControl: Skipping volume change - programmatic change in progress")
+            return
+        }
+        
         guard let userInfo = notification.userInfo,
               let newVolumeNumber = userInfo["AVSystemController_AudioVolumeNotificationParameter"] as? NSNumber else {
+            print("VolumeControl: Could not extract volume from notification")
             return
         }
         
         let newVolume = newVolumeNumber.floatValue
         let direction: String
         
+        print("VolumeControl: Volume changed from \(previousVolume) to \(newVolume)")
+        
         if newVolume > previousVolume {
             direction = "up"
         } else if newVolume < previousVolume {
             direction = "down"
         } else {
+            print("VolumeControl: No volume change detected")
             return // No change
         }
         
         // If we're intercepting system volume changes, reset the system volume
         if disableSystemVolumeHandler && volumeSlider != nil {
-            DispatchQueue.main.async { [weak self] in
+            print("VolumeControl: Intercepting volume change - resetting to previous volume")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
                 self?.resetSystemVolume()
             }
+        } else {
+            // Update our reference if not intercepting
+            previousVolume = newVolume
         }
         
         // Notify JavaScript layer
@@ -239,14 +282,17 @@ public class VolumeControlPlugin: CAPPlugin {
             "level": newVolume
         ]
         
+        print("VolumeControl: Notifying JS layer - direction: \(direction), level: \(newVolume)")
         notifyListeners("volumeChanged", data: data)
-        
-        // Update our reference
-        previousVolume = newVolume
     }
     
     private func resetSystemVolume() {
-        guard let volumeSlider = volumeSlider else { return }
+        guard let volumeSlider = volumeSlider else { 
+            print("VolumeControl: Cannot reset volume - slider not available")
+            return 
+        }
+        
+        isSettingVolume = true
         
         var resetVolume = previousVolume
         
@@ -259,5 +305,12 @@ public class VolumeControlPlugin: CAPPlugin {
         
         volumeSlider.setValue(resetVolume, animated: false)
         volumeSlider.sendActions(for: .touchUpInside)
+        
+        print("VolumeControl: Volume reset to \(resetVolume)")
+        
+        // Reset flag after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.isSettingVolume = false
+        }
     }
 }
