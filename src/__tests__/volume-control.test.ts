@@ -129,7 +129,7 @@ describe('VolumeControlWeb', () => {
       }
       
       // Remove all listeners
-      await volumeControl.removeAllListeners('volumeChanged');
+      await volumeControl.removeAllListeners();
     });
 
     it('should remove all listeners', async () => {
@@ -139,7 +139,7 @@ describe('VolumeControlWeb', () => {
       await volumeControl.addListener('volumeChanged', callback1);
       await volumeControl.addListener('volumeChanged', callback2);
       
-      await volumeControl.removeAllListeners('volumeChanged');
+      await volumeControl.removeAllListeners();
       
       // Should not throw
       expect(true).toBe(true);

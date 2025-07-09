@@ -80,7 +80,7 @@ await VolumeControl.clearWatch();
 listener.remove();
 
 // Or remove all listeners
-await VolumeControl.removeAllListeners('volumeChanged');
+await VolumeControl.removeAllListeners();
 ```
 
 ### Advanced Usage
@@ -249,7 +249,7 @@ export function useVolumeControl() {
     // Cleanup on unmount
     return () => {
       VolumeControl.clearWatch();
-      VolumeControl.removeAllListeners('volumeChanged');
+      VolumeControl.removeAllListeners();
     };
   }, []);
 
@@ -277,7 +277,7 @@ export function useVolumeControl() {
   const stopWatching = async () => {
     try {
       await VolumeControl.clearWatch();
-      await VolumeControl.removeAllListeners('volumeChanged');
+      await VolumeControl.removeAllListeners();
       setIsWatching(false);
     } catch (error) {
       console.error('Failed to stop watching:', error);
@@ -359,7 +359,7 @@ export function useVolumeControl() {
         volumeListener = null;
       }
       
-      await VolumeControl.removeAllListeners('volumeChanged');
+      await VolumeControl.removeAllListeners();
       isWatching.value = false;
     } catch (error) {
       console.error('Failed to stop watching:', error);
@@ -448,7 +448,7 @@ export class VolumeService {
         this.volumeListener = null;
       }
       
-      await VolumeControl.removeAllListeners('volumeChanged');
+      await VolumeControl.removeAllListeners();
       this.isWatchingSubject.next(false);
     } catch (error) {
       console.error('Failed to stop watching:', error);

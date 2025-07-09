@@ -75,7 +75,7 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
     this.isWatchingVolume = false;
     
     // Remove all listeners
-    await this.removeAllListeners('volumeChanged');
+    await this.removeAllListeners();
   }
 
   async isWatching(): Promise<WatchStatusResult> {
