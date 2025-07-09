@@ -53,11 +53,6 @@ export interface VolumeEvent {
    * Direction of volume change
    */
   direction: 'up' | 'down';
-  
-  /**
-   * New volume level as a float between 0.0 and 1.0
-   */
-  level: number;
 }
 
 export interface WatchStatusResult {
@@ -67,7 +62,7 @@ export interface WatchStatusResult {
   value: boolean;
 }
 
-export type VolumeChangeCallback = (event: VolumeEvent) => void;
+export type VolumeChangeCallback = (result: VolumeEvent) => void;
 
 export interface VolumeControlPlugin {
   /**
@@ -90,10 +85,10 @@ export interface VolumeControlPlugin {
    * Start watching volume changes
    * @param options Watch options
    * @param callback Callback function for volume changes
-   * @returns Promise resolving when watch is started
+   * @returns Promise resolving to callback ID
    * @since 1.0.0
    */
-  watchVolume(options: WatchVolumeOptions, callback: VolumeChangeCallback): Promise<void>;
+  watchVolume(options: WatchVolumeOptions, callback: VolumeChangeCallback): Promise<string>;
 
   /**
    * Clear volume watch
@@ -108,21 +103,4 @@ export interface VolumeControlPlugin {
    * @since 1.0.0
    */
   isWatching(): Promise<WatchStatusResult>;
-
-  /**
-   * Add listener for volume change events
-   * @param eventName Event name
-   * @param listenerFunc Listener function
-   * @returns Promise resolving to listener handle
-   * @since 1.0.0
-   */
-  addListener(eventName: 'volumeChanged', listenerFunc: VolumeChangeCallback): Promise<any>;
-
-  /**
-   * Remove all listeners for an event
-   * @param eventName Event name
-   * @returns Promise resolving when listeners are removed
-   * @since 1.0.0
-   */
-  removeAllListeners(eventName?: string): Promise<void>;
 }

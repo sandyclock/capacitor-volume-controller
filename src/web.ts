@@ -41,18 +41,15 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
     return { value: options.value };
   }
 
-  async watchVolume(options: WatchVolumeOptions, callback: VolumeChangeCallback): Promise<void> {
+  async watchVolume(options: WatchVolumeOptions, callback: VolumeChangeCallback): Promise<string> {
     console.log('watchVolume called with options:', options);
     
     if (this.isWatchingVolume) {
-      throw new Error('Volume watching is already active');
+      throw new Error('Volume buttons has already been watched');
     }
     
     this.watchCallback = callback;
     this.isWatchingVolume = true;
-    
-    // Add the listener for volume change events
-    this.addListener('volumeChanged', callback);
     
     // Web implementation - limited volume change detection
     // We can't reliably detect hardware volume button presses in browsers
@@ -62,20 +59,24 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
     if (process.env.NODE_ENV === 'development') {
       setTimeout(() => {
         if (this.isWatchingVolume && this.watchCallback) {
-          this.watchCallback({ direction: 'up', level: 0.7 });
+          this.watchCallback({ direction: 'up' });
         }
       }, 3000);
     }
+    
+    // Return a callback ID (mock)
+    return 'web-volume-watch-1';
   }
 
   async clearWatch(): Promise<void> {
     console.log('clearWatch called');
     
+    if (!this.isWatchingVolume) {
+      throw new Error('Volume buttons has not been watched');
+    }
+    
     this.watchCallback = undefined;
     this.isWatchingVolume = false;
-    
-    // Remove all listeners
-    await this.removeAllListeners();
   }
 
   async isWatching(): Promise<WatchStatusResult> {

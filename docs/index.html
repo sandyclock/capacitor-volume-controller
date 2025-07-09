@@ -553,7 +553,7 @@ await VolumeControl.setVolumeLevel({ value: 0.5 });
 await VolumeControl.watchVolume({
   suppressVolumeIndicator: true
 }, (event) => {
-  console.log('Volume changed:', event.direction, event.level);
+  console.log('Volume changed:', event.direction);
 });</pre>
             </div>
         </div>
@@ -640,12 +640,12 @@ await VolumeControl.watchVolume({
   suppressVolumeIndicator: true,    // Android: hide volume UI
   disableSystemVolumeHandler: true  // iOS: disable system UI
 }, (event) => {
-  console.log('Volume changed:', event.direction, event.level);
+  console.log('Volume changed:', event.direction);
 });
 
 // Method 2: Using event listeners (recommended for frameworks)
 const listener = await VolumeControl.addListener('volumeChanged', (event) => {
-  console.log('Volume changed:', event.direction, event.level);
+  console.log('Volume changed:', event.direction);
 });
 
 // Start watching (required for both methods)
@@ -941,7 +941,7 @@ export function useVolumeControl() {
       // Add event listener
       volumeListener = await VolumeControl.addListener('volumeChanged', (event) => {
         volume.value = event.level;
-        console.log('Volume changed:', event.direction, event.level);
+        console.log('Volume changed:', event.direction);
       });
 
       // Start watching
@@ -1037,7 +1037,7 @@ export class VolumeService {
       // Add event listener
       this.volumeListener = await VolumeControl.addListener('volumeChanged', (event) => {
         this.volumeSubject.next(event.level);
-        console.log('Volume changed:', event.direction, event.level);
+        console.log('Volume changed:', event.direction);
       });
 
       // Start watching
@@ -1129,7 +1129,7 @@ export class VolumeService {
   suppressVolumeIndicator?: boolean;     // Android: hide volume UI
 }, callback: VolumeChangeCallback): Promise&lt;void&gt;
 
-// Callback receives: { direction: 'up' | 'down', level: number }</pre>
+// Callback receives: { direction: 'up' | 'down' }</pre>
                 </div>
             </div>
 
