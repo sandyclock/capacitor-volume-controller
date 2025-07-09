@@ -108,4 +108,21 @@ export interface VolumeControlPlugin {
    * @since 1.0.0
    */
   isWatching(): Promise<WatchStatusResult>;
+
+  /**
+   * Add listener for volume change events
+   * @param eventName Event name
+   * @param listenerFunc Listener function
+   * @returns Promise resolving to listener handle
+   * @since 1.0.0
+   */
+  addListener(eventName: 'volumeChanged', listenerFunc: VolumeChangeCallback): Promise<any>;
+
+  /**
+   * Remove all listeners for an event
+   * @param eventName Event name
+   * @returns Promise resolving when listeners are removed
+   * @since 1.0.0
+   */
+  removeAllListeners(eventName?: string): Promise<void>;
 }

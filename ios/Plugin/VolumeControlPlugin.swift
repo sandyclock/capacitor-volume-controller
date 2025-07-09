@@ -14,12 +14,14 @@ public class VolumeControlPlugin: CAPPlugin {
     private var volumeSlider: UISlider?
     private var isWatching = false
     private var disableSystemVolumeHandler = false
-    private var initialSystemVolume: Float = 0.5
+    private var previousVolume: Float = 0.5
     private var volumeObserver: NSObjectProtocol?
     
     public override func load() {
-        setupVolumeView()
         setupAudioSession()
+        setupVolumeView()
+        // Initialize previous volume
+        previousVolume = AVAudioSession.sharedInstance().outputVolume
     }
     
     deinit {
@@ -85,45 +87,61 @@ public class VolumeControlPlugin: CAPPlugin {
     
     // MARK: - Private Methods
     
-    private func setupVolumeView() {
-        DispatchQueue.main.async { [weak self] in
-            self?.volumeView = MPVolumeView(frame: CGRect(x: -1000, y: -1000, width: 100, height: 100))
-            
-            if let volumeView = self?.volumeView {
-                self?.bridge?.webView?.addSubview(volumeView)
-                volumeView.isHidden = true
-                
-                // Find the volume slider
-                for view in volumeView.subviews {
-                    if let slider = view as? UISlider {
-                        self?.volumeSlider = slider
-                        break
-                    }
-                }
-            }
-        }
-    }
-    
     private func setupAudioSession() {
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setActive(true)
         } catch {
             print("Failed to setup audio session: \(error)")
         }
     }
     
+    private func setupVolumeView() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.volumeView = MPVolumeView(frame: CGRect(x: -1000, y: -1000, width: 100, height: 100))
+            
+            if let volumeView = self.volumeView {
+                // Add to a view that exists
+                if let webView = self.bridge?.webView {
+                    webView.addSubview(volumeView)
+                }
+                
+                volumeView.isHidden = true
+                volumeView.showsVolumeSlider = true
+                volumeView.showsRouteButton = false
+                
+                // Find the volume slider with a delay to ensure it's created
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.findVolumeSlider()
+                }
+            }
+        }
+    }
+    
+    private func findVolumeSlider() {
+        guard let volumeView = volumeView else { return }
+        
+        for view in volumeView.subviews {
+            if let slider = view as? UISlider {
+                volumeSlider = slider
+                break
+            }
+        }
+        
+        // If not found, try again after a short delay
+        if volumeSlider == nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.findVolumeSlider()
+            }
+        }
+    }
+    
     private func getCurrentVolume(for volumeType: String) throws -> Float {
         let audioSession = AVAudioSession.sharedInstance()
-        
-        // iOS primarily uses system volume, but we can differentiate based on audio category
-        switch volumeType {
-        case "voice_call":
-            // For voice calls, we'd typically use different audio category
-            return audioSession.outputVolume
-        default:
-            return audioSession.outputVolume
-        }
+        return audioSession.outputVolume
     }
     
     private func setVolume(_ volume: Float, for volumeType: String) throws {
@@ -138,11 +156,8 @@ public class VolumeControlPlugin: CAPPlugin {
     }
     
     private func startVolumeWatching() throws {
-        guard let volumeSlider = volumeSlider else {
-            throw NSError(domain: "VolumeControl", code: 1, userInfo: [NSLocalizedDescriptionKey: "Volume slider not available"])
-        }
-        
-        initialSystemVolume = AVAudioSession.sharedInstance().outputVolume
+        // Initialize previous volume
+        previousVolume = AVAudioSession.sharedInstance().outputVolume
         
         // Set up volume observation
         volumeObserver = NotificationCenter.default.addObserver(
@@ -178,29 +193,29 @@ public class VolumeControlPlugin: CAPPlugin {
     }
     
     private func setupVolumeButtonInterception() {
-        // This is a workaround to intercept volume button presses
-        // We monitor volume changes and reset the system volume
         DispatchQueue.main.async { [weak self] in
-            self?.volumeView?.isHidden = false
-            self?.volumeView?.alpha = 0.01
+            guard let self = self, let volumeView = self.volumeView else { return }
+            volumeView.isHidden = false
+            volumeView.alpha = 0.01
+            volumeView.frame = CGRect(x: -1000, y: -1000, width: 100, height: 100)
         }
     }
     
     private func restoreSystemVolume() {
         DispatchQueue.main.async { [weak self] in
-            self?.volumeView?.isHidden = true
-            self?.volumeView?.alpha = 1.0
+            guard let self = self, let volumeView = self.volumeView else { return }
+            volumeView.isHidden = true
+            volumeView.alpha = 1.0
         }
     }
     
     private func handleVolumeChange(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
-              let volumeChangeType = userInfo["AVSystemController_AudioVolumeChangeReasonKey"] as? String,
-              let newVolume = userInfo["AVSystemController_AudioVolumeNotificationParameter"] as? Float else {
+              let newVolumeNumber = userInfo["AVSystemController_AudioVolumeNotificationParameter"] as? NSNumber else {
             return
         }
         
-        let previousVolume = initialSystemVolume
+        let newVolume = newVolumeNumber.floatValue
         let direction: String
         
         if newVolume > previousVolume {
@@ -212,7 +227,7 @@ public class VolumeControlPlugin: CAPPlugin {
         }
         
         // If we're intercepting system volume changes, reset the system volume
-        if disableSystemVolumeHandler {
+        if disableSystemVolumeHandler && volumeSlider != nil {
             DispatchQueue.main.async { [weak self] in
                 self?.resetSystemVolume()
             }
@@ -227,13 +242,13 @@ public class VolumeControlPlugin: CAPPlugin {
         notifyListeners("volumeChanged", data: data)
         
         // Update our reference
-        initialSystemVolume = newVolume
+        previousVolume = newVolume
     }
     
     private func resetSystemVolume() {
         guard let volumeSlider = volumeSlider else { return }
         
-        var resetVolume = initialSystemVolume
+        var resetVolume = previousVolume
         
         // Ensure we don't reset to extreme values
         if resetVolume < 0.05 {

@@ -20,9 +20,12 @@ class VolumeControlPlugin : Plugin() {
     private var volumeObserver: VolumeObserver? = null
     private var isWatching = false
     private var suppressVolumeIndicator = false
+    private var previousVolume = -1
     
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        // Initialize previous volume
+        previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
     }
     
     @PluginMethod
@@ -100,8 +103,21 @@ class VolumeControlPlugin : Plugin() {
             val handler = Handler(Looper.getMainLooper())
             volumeObserver = VolumeObserver(handler)
             
-            val uri = Settings.System.getUriFor("volume_music")
-            context.contentResolver.registerContentObserver(uri, true, volumeObserver!!)
+            // Register observer for all volume types that might change
+            val volumeUris = listOf(
+                Settings.System.getUriFor(Settings.System.VOLUME_MUSIC),
+                Settings.System.getUriFor(Settings.System.VOLUME_RING),
+                Settings.System.getUriFor(Settings.System.VOLUME_NOTIFICATION),
+                Settings.System.getUriFor(Settings.System.VOLUME_ALARM),
+                Settings.System.getUriFor(Settings.System.VOLUME_SYSTEM)
+            )
+            
+            volumeUris.forEach { uri ->
+                context.contentResolver.registerContentObserver(uri, true, volumeObserver!!)
+            }
+            
+            // Initialize previous volume
+            previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             
             isWatching = true
             call.resolve()
@@ -121,6 +137,7 @@ class VolumeControlPlugin : Plugin() {
             
             isWatching = false
             suppressVolumeIndicator = false
+            previousVolume = -1
             call.resolve()
             
         } catch (e: Exception) {
@@ -149,15 +166,16 @@ class VolumeControlPlugin : Plugin() {
     }
     
     private inner class VolumeObserver(handler: Handler) : ContentObserver(handler) {
-        private var previousVolume = -1
         
         override fun onChange(selfChange: Boolean, uri: Uri?) {
             super.onChange(selfChange, uri)
             
             try {
+                // Get current volume for music stream (most commonly used)
                 val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
                 val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 
+                // Only notify if volume actually changed
                 if (previousVolume != -1 && previousVolume != currentVolume) {
                     val direction = if (currentVolume > previousVolume) "up" else "down"
                     val normalizedLevel = if (maxVolume > 0) {
@@ -170,13 +188,15 @@ class VolumeControlPlugin : Plugin() {
                     ret.put("direction", direction)
                     ret.put("level", normalizedLevel)
                     
+                    // Notify JavaScript layer
                     notifyListeners("volumeChanged", ret)
                 }
                 
                 previousVolume = currentVolume
                 
             } catch (e: Exception) {
-                // Handle error silently or log
+                // Log error but don't crash
+                android.util.Log.e("VolumeControl", "Error in volume observer: ${e.message}")
             }
         }
         

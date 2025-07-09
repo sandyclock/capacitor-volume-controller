@@ -78,6 +78,14 @@ describe('VolumeControlWeb', () => {
       const watchStatus = await volumeControl.isWatching();
       expect(watchStatus.value).toBe(true);
     });
+
+    it('should add event listener for volume changes', async () => {
+      const callback = jest.fn();
+      
+      const listener = await volumeControl.addListener('volumeChanged', callback);
+      expect(listener).toBeDefined();
+      expect(typeof listener.remove).toBe('function');
+    });
   });
 
   describe('clearWatch', () => {
@@ -105,6 +113,36 @@ describe('VolumeControlWeb', () => {
       
       const watchStatus = await volumeControl.isWatching();
       expect(watchStatus.value).toBe(true);
+    });
+  });
+
+  describe('event listeners', () => {
+    it('should add and remove event listeners', async () => {
+      const callback = jest.fn();
+      
+      const listener = await volumeControl.addListener('volumeChanged', callback);
+      expect(listener).toBeDefined();
+      
+      // Remove listener
+      if (listener && typeof listener.remove === 'function') {
+        listener.remove();
+      }
+      
+      // Remove all listeners
+      await volumeControl.removeAllListeners();
+    });
+
+    it('should remove all listeners', async () => {
+      const callback1 = jest.fn();
+      const callback2 = jest.fn();
+      
+      await volumeControl.addListener('volumeChanged', callback1);
+      await volumeControl.addListener('volumeChanged', callback2);
+      
+      await volumeControl.removeAllListeners();
+      
+      // Should not throw
+      expect(true).toBe(true);
     });
   });
 });
