@@ -54,7 +54,7 @@ await VolumeControl.setVolumeLevel({ value: 0.5 });
 ### Volume Watching
 
 ```typescript
-// Start watching volume changes
+// Method 1: Using watchVolume with callback
 await VolumeControl.watchVolume({
   disableSystemVolumeHandler: true, // iOS only
   suppressVolumeIndicator: true,    // Android only
@@ -62,8 +62,25 @@ await VolumeControl.watchVolume({
   console.log('Volume changed:', event.direction, event.level);
 });
 
+// Method 2: Using event listeners (recommended for frameworks)
+const listener = await VolumeControl.addListener('volumeChanged', (event) => {
+  console.log('Volume changed:', event.direction, event.level);
+});
+
+// Start watching (required for both methods)
+await VolumeControl.watchVolume({
+  disableSystemVolumeHandler: true,
+  suppressVolumeIndicator: true
+}, () => {}); // Empty callback if using event listeners
+
 // Stop watching
 await VolumeControl.clearWatch();
+
+// Remove specific listener
+listener.remove();
+
+// Or remove all listeners
+await VolumeControl.removeAllListeners('volumeChanged');
 ```
 
 ### Advanced Usage
@@ -232,6 +249,7 @@ export function useVolumeControl() {
     // Cleanup on unmount
     return () => {
       VolumeControl.clearWatch();
+      VolumeControl.removeAllListeners('volumeChanged');
     };
   }, []);
 
@@ -239,12 +257,16 @@ export function useVolumeControl() {
     if (isWatching) return;
 
     try {
+      // Add event listener first
+      await VolumeControl.addListener('volumeChanged', (event) => {
+        setVolume(event.level);
+      });
+      
+      // Start watching with empty callback since we're using event listeners
       await VolumeControl.watchVolume({
         disableSystemVolumeHandler: true,
         suppressVolumeIndicator: true
-      }, (event) => {
-        setVolume(event.level);
-      });
+      }, () => {});
       
       setIsWatching(true);
     } catch (error) {
@@ -255,6 +277,7 @@ export function useVolumeControl() {
   const stopWatching = async () => {
     try {
       await VolumeControl.clearWatch();
+      await VolumeControl.removeAllListeners('volumeChanged');
       setIsWatching(false);
     } catch (error) {
       console.error('Failed to stop watching:', error);
@@ -277,6 +300,171 @@ export function useVolumeControl() {
     stopWatching,
     setVolumeLevel
   };
+}
+```
+
+## Vue Composition API Example
+
+```typescript
+import { ref, onMounted, onUnmounted } from 'vue';
+import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+
+export function useVolumeControl() {
+  const volume = ref(0.5);
+  const isWatching = ref(false);
+  let volumeListener: any = null;
+
+  onMounted(async () => {
+    // Get initial volume
+    try {
+      const result = await VolumeControl.getVolumeLevel();
+      volume.value = result.value;
+    } catch (error) {
+      console.error('Failed to get initial volume:', error);
+    }
+  });
+
+  onUnmounted(async () => {
+    await stopWatching();
+  });
+
+  const startWatching = async () => {
+    if (isWatching.value) return;
+
+    try {
+      // Add event listener
+      volumeListener = await VolumeControl.addListener('volumeChanged', (event) => {
+        volume.value = event.level;
+        console.log('Volume changed:', event.direction, event.level);
+      });
+
+      // Start watching
+      await VolumeControl.watchVolume({
+        disableSystemVolumeHandler: true,
+        suppressVolumeIndicator: true
+      }, () => {});
+
+      isWatching.value = true;
+    } catch (error) {
+      console.error('Failed to start watching:', error);
+    }
+  };
+
+  const stopWatching = async () => {
+    try {
+      await VolumeControl.clearWatch();
+      
+      if (volumeListener) {
+        volumeListener.remove();
+        volumeListener = null;
+      }
+      
+      await VolumeControl.removeAllListeners('volumeChanged');
+      isWatching.value = false;
+    } catch (error) {
+      console.error('Failed to stop watching:', error);
+    }
+  };
+
+  const setVolumeLevel = async (value: number) => {
+    try {
+      await VolumeControl.setVolumeLevel({ value });
+      volume.value = value;
+    } catch (error) {
+      console.error('Failed to set volume:', error);
+    }
+  };
+
+  return {
+    volume,
+    isWatching,
+    startWatching,
+    stopWatching,
+    setVolumeLevel
+  };
+}
+```
+
+## Angular Service Example
+
+```typescript
+import { Injectable } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
+import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class VolumeService {
+  private volumeSubject = new BehaviorSubject<number>(0.5);
+  private isWatchingSubject = new BehaviorSubject<boolean>(false);
+  private volumeListener: any = null;
+
+  public volume$ = this.volumeSubject.asObservable();
+  public isWatching$ = this.isWatchingSubject.asObservable();
+
+  constructor() {
+    this.initializeVolume();
+  }
+
+  private async initializeVolume() {
+    try {
+      const result = await VolumeControl.getVolumeLevel();
+      this.volumeSubject.next(result.value);
+    } catch (error) {
+      console.error('Failed to get initial volume:', error);
+    }
+  }
+
+  async startWatching(): Promise<void> {
+    if (this.isWatchingSubject.value) return;
+
+    try {
+      // Add event listener
+      this.volumeListener = await VolumeControl.addListener('volumeChanged', (event) => {
+        this.volumeSubject.next(event.level);
+        console.log('Volume changed:', event.direction, event.level);
+      });
+
+      // Start watching
+      await VolumeControl.watchVolume({
+        disableSystemVolumeHandler: true,
+        suppressVolumeIndicator: true
+      }, () => {});
+
+      this.isWatchingSubject.next(true);
+    } catch (error) {
+      console.error('Failed to start watching:', error);
+      throw error;
+    }
+  }
+
+  async stopWatching(): Promise<void> {
+    try {
+      await VolumeControl.clearWatch();
+      
+      if (this.volumeListener) {
+        this.volumeListener.remove();
+        this.volumeListener = null;
+      }
+      
+      await VolumeControl.removeAllListeners('volumeChanged');
+      this.isWatchingSubject.next(false);
+    } catch (error) {
+      console.error('Failed to stop watching:', error);
+      throw error;
+    }
+  }
+
+  async setVolumeLevel(value: number): Promise<void> {
+    try {
+      await VolumeControl.setVolumeLevel({ value });
+      this.volumeSubject.next(value);
+    } catch (error) {
+      console.error('Failed to set volume:', error);
+      throw error;
+    }
+  }
 }
 ```
 
@@ -372,6 +560,22 @@ watchVolume({
 // Callback receives: { direction: 'up' | 'down', level: number }
 ```
 
+#### `addListener(eventName, callback)`
+Add listener for volume change events (recommended for frameworks).
+
+```typescript
+addListener(eventName: 'volumeChanged', callback: VolumeChangeCallback): Promise<PluginListenerHandle>
+
+// Returns: PluginListenerHandle with remove() method
+```
+
+#### `removeAllListeners(eventName?)`
+Remove all listeners for an event.
+
+```typescript
+removeAllListeners(eventName?: string): Promise<void>
+```
+
 #### `clearWatch()`
 Stop watching for volume changes.
 
@@ -407,6 +611,16 @@ Common errors and their solutions:
 | `Volume watching is already active` | Multiple watch calls | Call `clearWatch()` before starting new watch |
 | `Volume slider not available` | iOS setup issue | Check audio session configuration |
 | `Failed to get volume level` | Permission or system error | Verify permissions and device compatibility |
+| `Volume observer registration failed` | Android system issue | Restart app or check system permissions |
+| `Audio session setup failed` | iOS audio session issue | Check audio session category and options |
+
+### Best Practices
+
+1. **Always clean up listeners**: Remove event listeners when components unmount
+2. **Use event listeners for frameworks**: Prefer `addListener()` over callback in `watchVolume()`
+3. **Handle errors gracefully**: Wrap volume operations in try-catch blocks
+4. **Check watch status**: Use `isWatching()` to avoid duplicate watch calls
+5. **Test on real devices**: Volume watching requires physical hardware
 
 ## Support This Project
 
