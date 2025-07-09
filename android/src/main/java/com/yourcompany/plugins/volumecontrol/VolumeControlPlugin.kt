@@ -103,17 +103,23 @@ class VolumeControlPlugin : Plugin() {
             val handler = Handler(Looper.getMainLooper())
             volumeObserver = VolumeObserver(handler)
             
-            // Register observer for all volume types that might change
+            // Register observer for different volume types
             val volumeUris = listOf(
-                Settings.System.getUriFor(Settings.System.VOLUME_MUSIC),
-                Settings.System.getUriFor(Settings.System.VOLUME_RING),
-                Settings.System.getUriFor(Settings.System.VOLUME_NOTIFICATION),
-                Settings.System.getUriFor(Settings.System.VOLUME_ALARM),
-                Settings.System.getUriFor(Settings.System.VOLUME_SYSTEM)
+                "volume_music",
+                "volume_ring", 
+                "volume_notification",
+                "volume_alarm",
+                "volume_system"
             )
             
-            volumeUris.forEach { uri ->
-                context.contentResolver.registerContentObserver(uri, true, volumeObserver!!)
+            volumeUris.forEach { volumeKey ->
+                try {
+                    val uri = Settings.System.getUriFor(volumeKey)
+                    context.contentResolver.registerContentObserver(uri, true, volumeObserver!!)
+                } catch (e: Exception) {
+                    // Some volume types might not be available on all devices
+                    android.util.Log.w("VolumeControl", "Could not register observer for $volumeKey: ${e.message}")
+                }
             }
             
             // Initialize previous volume
