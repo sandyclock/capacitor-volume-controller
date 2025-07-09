@@ -635,7 +635,7 @@ await VolumeControl.setVolumeLevel({
             <h3>4. Watch Volume Changes</h3>
             <div class="code-block">
                 <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                <pre>// Start watching volume changes
+                <pre>// Method 1: Using watchVolume with callback
 await VolumeControl.watchVolume({
   suppressVolumeIndicator: true,    // Android: hide volume UI
   disableSystemVolumeHandler: true  // iOS: disable system UI
@@ -643,8 +643,25 @@ await VolumeControl.watchVolume({
   console.log('Volume changed:', event.direction, event.level);
 });
 
+// Method 2: Using event listeners (recommended for frameworks)
+const listener = await VolumeControl.addListener('volumeChanged', (event) => {
+  console.log('Volume changed:', event.direction, event.level);
+});
+
+// Start watching (required for both methods)
+await VolumeControl.watchVolume({
+  disableSystemVolumeHandler: true,
+  suppressVolumeIndicator: true
+}, () => {}); // Empty callback if using event listeners
+
 // Stop watching
 await VolumeControl.clearWatch();
+
+// Remove specific listener
+listener.remove();
+
+// Or remove all listeners
+await VolumeControl.removeAllListeners();
 
 // Check if watching
 const isWatching = await VolumeControl.isWatching();
@@ -830,6 +847,7 @@ export function useVolumeControl() {
     // Cleanup on unmount
     return () => {
       VolumeControl.clearWatch();
+      VolumeControl.removeAllListeners();
     };
   }, []);
 
@@ -837,12 +855,16 @@ export function useVolumeControl() {
     if (isWatching) return;
 
     try {
+      // Add event listener first
+      await VolumeControl.addListener('volumeChanged', (event) => {
+        setVolume(event.level);
+      });
+      
+      // Start watching with empty callback since we're using event listeners
       await VolumeControl.watchVolume({
         disableSystemVolumeHandler: true,
         suppressVolumeIndicator: true
-      }, (event) => {
-        setVolume(event.level);
-      });
+      }, () => {});
       
       setIsWatching(true);
     } catch (error) {
@@ -853,6 +875,7 @@ export function useVolumeControl() {
   const stopWatching = async () => {
     try {
       await VolumeControl.clearWatch();
+      await VolumeControl.removeAllListeners();
       setIsWatching(false);
     } catch (error) {
       console.error('Failed to stop watching:', error);
@@ -884,6 +907,187 @@ export function useVolumeControl() {
                 Volume watching started<br>
                 Volume changed: 0.7<br>
                 Volume set to: 0.8
+            </div>
+
+            <h3>🎯 Vue Composition API Example</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>import { ref, onMounted, onUnmounted } from 'vue';
+import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+
+export function useVolumeControl() {
+  const volume = ref(0.5);
+  const isWatching = ref(false);
+  let volumeListener = null;
+
+  onMounted(async () => {
+    // Get initial volume
+    try {
+      const result = await VolumeControl.getVolumeLevel();
+      volume.value = result.value;
+    } catch (error) {
+      console.error('Failed to get initial volume:', error);
+    }
+  });
+
+  onUnmounted(async () => {
+    await stopWatching();
+  });
+
+  const startWatching = async () => {
+    if (isWatching.value) return;
+
+    try {
+      // Add event listener
+      volumeListener = await VolumeControl.addListener('volumeChanged', (event) => {
+        volume.value = event.level;
+        console.log('Volume changed:', event.direction, event.level);
+      });
+
+      // Start watching
+      await VolumeControl.watchVolume({
+        disableSystemVolumeHandler: true,
+        suppressVolumeIndicator: true
+      }, () => {});
+
+      isWatching.value = true;
+    } catch (error) {
+      console.error('Failed to start watching:', error);
+    }
+  };
+
+  const stopWatching = async () => {
+    try {
+      await VolumeControl.clearWatch();
+      
+      if (volumeListener) {
+        volumeListener.remove();
+        volumeListener = null;
+      }
+      
+      await VolumeControl.removeAllListeners();
+      isWatching.value = false;
+    } catch (error) {
+      console.error('Failed to stop watching:', error);
+    }
+  };
+
+  const setVolumeLevel = async (value) => {
+    try {
+      await VolumeControl.setVolumeLevel({ value });
+      volume.value = value;
+    } catch (error) {
+      console.error('Failed to set volume:', error);
+    }
+  };
+
+  return {
+    volume,
+    isWatching,
+    startWatching,
+    stopWatching,
+    setVolumeLevel
+  };
+}</pre>
+            </div>
+
+            <div class="example-output">
+                <strong>Output:</strong><br>
+                Volume initialized: 0.5<br>
+                Volume watching started<br>
+                Volume changed: up 0.6<br>
+                Volume set to: 0.8
+            </div>
+
+            <h3>🔧 Angular Service Example</h3>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre>import { Injectable } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
+import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class VolumeService {
+  private volumeSubject = new BehaviorSubject&lt;number&gt;(0.5);
+  private isWatchingSubject = new BehaviorSubject&lt;boolean&gt;(false);
+  private volumeListener = null;
+
+  public volume$ = this.volumeSubject.asObservable();
+  public isWatching$ = this.isWatchingSubject.asObservable();
+
+  constructor() {
+    this.initializeVolume();
+  }
+
+  private async initializeVolume() {
+    try {
+      const result = await VolumeControl.getVolumeLevel();
+      this.volumeSubject.next(result.value);
+    } catch (error) {
+      console.error('Failed to get initial volume:', error);
+    }
+  }
+
+  async startWatching(): Promise&lt;void&gt; {
+    if (this.isWatchingSubject.value) return;
+
+    try {
+      // Add event listener
+      this.volumeListener = await VolumeControl.addListener('volumeChanged', (event) => {
+        this.volumeSubject.next(event.level);
+        console.log('Volume changed:', event.direction, event.level);
+      });
+
+      // Start watching
+      await VolumeControl.watchVolume({
+        disableSystemVolumeHandler: true,
+        suppressVolumeIndicator: true
+      }, () => {});
+
+      this.isWatchingSubject.next(true);
+    } catch (error) {
+      console.error('Failed to start watching:', error);
+      throw error;
+    }
+  }
+
+  async stopWatching(): Promise&lt;void&gt; {
+    try {
+      await VolumeControl.clearWatch();
+      
+      if (this.volumeListener) {
+        this.volumeListener.remove();
+        this.volumeListener = null;
+      }
+      
+      await VolumeControl.removeAllListeners();
+      this.isWatchingSubject.next(false);
+    } catch (error) {
+      console.error('Failed to stop watching:', error);
+      throw error;
+    }
+  }
+
+  async setVolumeLevel(value: number): Promise&lt;void&gt; {
+    try {
+      await VolumeControl.setVolumeLevel({ value });
+      this.volumeSubject.next(value);
+    } catch (error) {
+      console.error('Failed to set volume:', error);
+      throw error;
+    }
+  }
+}</pre>
+            </div>
+
+            <div class="example-output">
+                <strong>Output:</strong><br>
+                Service initialized: volume 0.5<br>
+                Volume subscription active<br>
+                Volume changed: down 0.4<br>
+                Volume set via service: 0.7
             </div>
         </div>
 
@@ -926,6 +1130,24 @@ export function useVolumeControl() {
 }, callback: VolumeChangeCallback): Promise&lt;void&gt;
 
 // Callback receives: { direction: 'up' | 'down', level: number }</pre>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <div class="method-name">addListener(eventName, callback)</div>
+                <p>Add listener for volume change events (recommended for frameworks).</p>
+                <div class="code-block">
+                    <pre>addListener(eventName: 'volumeChanged', callback: VolumeChangeCallback): Promise&lt;PluginListenerHandle&gt;
+
+// Returns: PluginListenerHandle with remove() method</pre>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <div class="method-name">removeAllListeners(eventName?)</div>
+                <p>Remove all listeners for an event.</p>
+                <div class="code-block">
+                    <pre>removeAllListeners(eventName?: string): Promise&lt;void&gt;</pre>
                 </div>
             </div>
 
@@ -1045,7 +1267,76 @@ export function useVolumeControl() {
                     <li><code>Volume watching is already active</code> - Multiple watch calls</li>
                     <li><code>Volume slider not available</code> - iOS setup issue</li>
                     <li><code>Failed to get volume level</code> - Permission or system error</li>
+                    <li><code>Volume observer registration failed</code> - Android system issue</li>
+                    <li><code>Audio session setup failed</code> - iOS audio session issue</li>
                 </ul>
+            </div>
+
+            <h3>Best Practices</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🧹 Clean Up Listeners</h4>
+                    <p>Always remove event listeners when components unmount to prevent memory leaks.</p>
+                    <div class="code-block">
+                        <pre>// In React useEffect cleanup
+return () => {
+  VolumeControl.clearWatch();
+  VolumeControl.removeAllListeners();
+};</pre>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <h4>🎯 Use Event Listeners</h4>
+                    <p>Prefer <code>addListener()</code> over callback in <code>watchVolume()</code> for better framework integration.</p>
+                    <div class="code-block">
+                        <pre>// Recommended for frameworks
+await VolumeControl.addListener('volumeChanged', callback);
+await VolumeControl.watchVolume({}, () => {});</pre>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <h4>🛡️ Handle Errors Gracefully</h4>
+                    <p>Wrap volume operations in try-catch blocks and handle common error scenarios.</p>
+                    <div class="code-block">
+                        <pre>try {
+  await VolumeControl.setVolumeLevel({ value: 0.8 });
+} catch (error) {
+  if (error.message.includes('between 0.0 and 1.0')) {
+    console.error('Invalid volume value');
+  }
+}</pre>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <h4>🔍 Check Watch Status</h4>
+                    <p>Use <code>isWatching()</code> to avoid duplicate watch calls and manage state properly.</p>
+                    <div class="code-block">
+                        <pre>const status = await VolumeControl.isWatching();
+if (!status.value) {
+  await VolumeControl.watchVolume({}, callback);
+}</pre>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <h4>📱 Test on Real Devices</h4>
+                    <p>Volume watching and hardware button detection require physical devices for proper testing.</p>
+                    <div class="code-block">
+                        <pre>// Run on device for testing
+npx cap run android
+npx cap run ios</pre>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <h4>⚡ Performance Tips</h4>
+                    <p>Avoid frequent volume changes and batch operations when possible.</p>
+                    <div class="code-block">
+                        <pre>// Debounce volume changes
+const debouncedSetVolume = debounce(
+  (value) => VolumeControl.setVolumeLevel({ value }), 
+  100
+);</pre>
+                    </div>
+                </div>
             </div>
         </div>
         </div>
