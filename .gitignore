@@ -77,3 +77,4 @@ DerivedData/
 # Capacitor
 .capacitor/
 .bolt
+.env
