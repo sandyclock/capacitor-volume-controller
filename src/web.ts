@@ -13,13 +13,14 @@ import type {
 export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
   private watchCallback?: VolumeChangeCallback;
   private isWatchingVolume = false;
+  private mockVolume = 0.5;
 
   async getVolumeLevel(options?: VolumeOptions): Promise<VolumeResult> {
     console.log('getVolumeLevel called with options:', options);
     
     // Web implementation - limited to what's available in browsers
     // Most browsers don't expose system volume, so we return a mock value
-    return { value: 0.5 };
+    return { value: this.mockVolume };
   }
 
   async setVolumeLevel(options: SetVolumeOptions): Promise<VolumeResult> {
@@ -29,6 +30,9 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
     if (options.value < 0 || options.value > 1) {
       throw new Error('Volume value must be between 0.0 and 1.0');
     }
+    
+    // Update mock volume
+    this.mockVolume = options.value;
     
     // Web implementation - browsers don't allow setting system volume
     // This would typically show a warning or throw an error
@@ -47,9 +51,21 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
     this.watchCallback = callback;
     this.isWatchingVolume = true;
     
+    // Add the listener for volume change events
+    this.addListener('volumeChanged', callback);
+    
     // Web implementation - limited volume change detection
     // We can't reliably detect hardware volume button presses in browsers
     console.warn('Volume watching has limited functionality in web browsers');
+    
+    // Simulate volume changes for testing (remove in production)
+    if (process.env.NODE_ENV === 'development') {
+      setTimeout(() => {
+        if (this.isWatchingVolume && this.watchCallback) {
+          this.watchCallback({ direction: 'up', level: 0.7 });
+        }
+      }, 3000);
+    }
   }
 
   async clearWatch(): Promise<void> {
@@ -57,6 +73,9 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
     
     this.watchCallback = undefined;
     this.isWatchingVolume = false;
+    
+    // Remove all listeners
+    await this.removeAllListeners('volumeChanged');
   }
 
   async isWatching(): Promise<WatchStatusResult> {
