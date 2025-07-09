@@ -25,61 +25,42 @@ class VolumeControlPlugin : Plugin() {
     @PluginMethod
     fun getVolumeLevel(call: PluginCall) {
         try {
-            val volumeType = call.getString("type") ?: "music"
-            val streamType = mapVolumeTypeToStreamType(volumeType)
-            
+            val streamType = getStreamType(call.data)
             val currentVolume = audioManager.getStreamVolume(streamType)
             val maxVolume = audioManager.getStreamMaxVolume(streamType)
             
-            val normalizedVolume = if (maxVolume > 0) {
-                currentVolume.toFloat() / maxVolume.toFloat()
-            } else {
-                0.0f
-            }
+            // Normalize volume to 0-1 range
+            val normalizedVolume = currentVolume.toFloat() / maxVolume.toFloat()
             
             val ret = JSObject()
             ret.put("value", normalizedVolume)
             call.resolve(ret)
-            
         } catch (e: Exception) {
-            call.reject("Failed to get volume level: ${e.message}")
+            call.reject("Failed to get volume level", e)
         }
     }
     
     @PluginMethod
     fun setVolumeLevel(call: PluginCall) {
         try {
-            val value = call.getFloat("value") ?: run {
-                call.reject("Missing required parameter: value")
+            val value = call.getFloat("value")
+            if (value < 0 || value > 1) {
+                call.reject("Volume value must be between 0 and 1")
                 return
             }
-            
-            if (value < 0.0f || value > 1.0f) {
-                call.reject("Volume value must be between 0.0 and 1.0")
-                return
-            }
-            
-            val volumeType = call.getString("type") ?: "music"
-            val streamType = mapVolumeTypeToStreamType(volumeType)
-            
+
+            val streamType = getStreamType(call.data)
             val maxVolume = audioManager.getStreamMaxVolume(streamType)
             val targetVolumeLevel = (value * maxVolume).toInt()
             
-            // Set volume with or without showing system UI
-            val flags = if (suppressVolumeIndicator) {
-                0 // No flags means no system UI
-            } else {
-                AudioManager.FLAG_SHOW_UI
-            }
-            
-            audioManager.setStreamVolume(streamType, targetVolumeLevel, flags)
+            // Use 0 for flags to avoid showing the UI
+            audioManager.setStreamVolume(streamType, targetVolumeLevel, 0)
             
             val ret = JSObject()
             ret.put("value", value)
             call.resolve(ret)
-            
         } catch (e: Exception) {
-            call.reject("Failed to set volume level: ${e.message}")
+            call.reject("Failed to set volume level", e)
         }
     }
     
@@ -142,16 +123,13 @@ class VolumeControlPlugin : Plugin() {
         call.resolve()
     }
     
-    private fun mapVolumeTypeToStreamType(volumeType: String): Int {
-        return when (volumeType) {
-            "voice_call" -> AudioManager.STREAM_VOICE_CALL
-            "system" -> AudioManager.STREAM_SYSTEM
-            "ring" -> AudioManager.STREAM_RING
+    private fun getStreamType(data: JSObject): Int {
+        val type = data.getString("type", "music")
+        return when (type.toLowerCase()) {
             "music" -> AudioManager.STREAM_MUSIC
-            "alarm" -> AudioManager.STREAM_ALARM
             "notification" -> AudioManager.STREAM_NOTIFICATION
-            "dtmf" -> AudioManager.STREAM_DTMF
-            else -> AudioManager.STREAM_MUSIC // default
+            "system" -> AudioManager.STREAM_SYSTEM
+            else -> AudioManager.STREAM_MUSIC
         }
     }
 }
