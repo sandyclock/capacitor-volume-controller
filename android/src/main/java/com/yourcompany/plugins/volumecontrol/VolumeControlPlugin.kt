@@ -104,15 +104,9 @@ class VolumeControlPlugin : Plugin() {
                     if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
                         val isKeyUp = event?.action == KeyEvent.ACTION_UP
                         if (isKeyUp) {
-                            // Longer delay to ensure volume change is fully registered
-                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                // Force a fresh volume reading after the button press
-                                val freshVolume = getCurrentVolume()
-                                val ret = JSObject()
-                                ret.put("direction", if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
-                                ret.put("volume", freshVolume)
-                                call.resolve(ret)
-                            }, 100) // Increased delay to 100ms for more reliable readings
+                            val ret = JSObject()
+                            ret.put("direction", if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
+                            call.resolve(ret)
                         }
                         return suppressVolumeIndicator
                     }

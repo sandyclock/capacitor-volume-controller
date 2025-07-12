@@ -74,10 +74,6 @@ public class VolumeControlPlugin: CAPPlugin {
             if let id = self.savedCallID, let savedCall = self.bridge?.savedCall(withID: id) {
                 var jsObject = JSObject()
                 jsObject["direction"] = direction
-                // Get fresh volume with 2 decimal precision
-                let freshVolume = AVAudioSession.sharedInstance().outputVolume
-                let roundedVolume = round(freshVolume * 100) / 100
-                jsObject["volume"] = roundedVolume
                 savedCall.resolve(jsObject)
             }
         }
