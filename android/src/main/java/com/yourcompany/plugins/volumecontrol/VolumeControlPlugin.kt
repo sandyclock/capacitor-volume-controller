@@ -1,12 +1,7 @@
 package com.yourcompany.plugins.volumecontrol
 
 import android.content.Context
-import android.database.ContentObserver
 import android.media.AudioManager
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
 import android.view.KeyEvent
 import android.view.View
 import com.getcapacitor.JSObject
@@ -23,20 +18,16 @@ class VolumeControlPlugin : Plugin() {
     private var savedCall: PluginCall? = null
     private var isStarted = false
     private var suppressVolumeIndicator = false
-    private var currentTrackedVolume: Float = 0f
-    private var volumeContentObserver: VolumeContentObserver? = null
     
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        // Initialize tracked volume
-        currentTrackedVolume = getCurrentVolumeFromSystem()
     }
     
     private fun roundToTwoDecimals(value: Float): Float {
         return (round(value * 100f) / 100f).coerceIn(0f, 1f)
     }
     
-    private fun getCurrentVolumeFromSystem(): Float {
+    private fun getCurrentVolume(): Float {
         val streamType = AudioManager.STREAM_MUSIC
         val currentVolume = audioManager.getStreamVolume(streamType)
         val maxVolume = audioManager.getStreamMaxVolume(streamType)
@@ -46,9 +37,10 @@ class VolumeControlPlugin : Plugin() {
     @PluginMethod
     fun getVolumeLevel(call: PluginCall) {
         try {
-            // Always use the most current tracked volume for consistency
+            val normalizedVolume = getCurrentVolume()
+            
             val ret = JSObject()
-            ret.put("value", currentTrackedVolume)
+            ret.put("value", normalizedVolume)
             call.resolve(ret)
         } catch (e: Exception) {
             call.reject("Failed to get volume level", e)
@@ -76,11 +68,11 @@ class VolumeControlPlugin : Plugin() {
             // Use 0 for flags to avoid showing the UI
             audioManager.setStreamVolume(streamType, targetVolumeLevel, 0)
             
-            // Update tracked volume immediately
-            currentTrackedVolume = roundedValue
+            // Get the actual volume after setting it
+            val actualVolume = getCurrentVolume()
             
             val ret = JSObject()
-            ret.put("value", roundedValue)
+            ret.put("value", actualVolume)
             call.resolve(ret)
         } catch (e: Exception) {
             call.reject("Failed to set volume level", e)
@@ -106,18 +98,21 @@ class VolumeControlPlugin : Plugin() {
         call.setKeepAlive(true)
         savedCall = call
         
-        // Start the proper volume content observer for real-time tracking
-        startVolumeContentObserver()
-        
-        // Also monitor hardware key events
         bridge.webView.setOnKeyListener(
             object : View.OnKeyListener {
                 override fun onKey(v: View?, keyCode: Int, event: KeyEvent?): Boolean {
                     if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
                         val isKeyUp = event?.action == KeyEvent.ACTION_UP
                         if (isKeyUp) {
-                            // The ContentObserver will handle the volume change notification
-                            // This just suppresses the volume indicator if requested
+                            // Longer delay to ensure volume change is fully registered
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                // Force a fresh volume reading after the button press
+                                val freshVolume = getCurrentVolume()
+                                val ret = JSObject()
+                                ret.put("direction", if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
+                                ret.put("volume", freshVolume)
+                                call.resolve(ret)
+                            }, 100) // Increased delay to 100ms for more reliable readings
                         }
                         return suppressVolumeIndicator
                     }
@@ -136,9 +131,6 @@ class VolumeControlPlugin : Plugin() {
             return
         }
         
-        // Stop volume content observer
-        stopVolumeContentObserver()
-        
         bridge.webView.setOnKeyListener(null)
         
         if (savedCall != null) {
@@ -148,61 +140,5 @@ class VolumeControlPlugin : Plugin() {
         
         isStarted = false
         call.resolve()
-    }
-    
-    private fun startVolumeContentObserver() {
-        if (volumeContentObserver == null) {
-            volumeContentObserver = VolumeContentObserver(Handler(Looper.getMainLooper()))
-            context.contentResolver.registerContentObserver(
-                Settings.System.CONTENT_URI,
-                true,
-                volumeContentObserver!!
-            )
-        }
-    }
-    
-    private fun stopVolumeContentObserver() {
-        volumeContentObserver?.let {
-            context.contentResolver.unregisterContentObserver(it)
-            volumeContentObserver = null
-        }
-    }
-    
-    override fun handleOnDestroy() {
-        stopVolumeContentObserver()
-        super.handleOnDestroy()
-    }
-    
-    private inner class VolumeContentObserver(handler: Handler) : ContentObserver(handler) {
-        private var previousVolume = currentTrackedVolume
-        
-        override fun onChange(selfChange: Boolean, uri: Uri?) {
-            super.onChange(selfChange, uri)
-            
-            // Get the fresh volume from the system
-            val newVolume = getCurrentVolumeFromSystem()
-            
-            // Check if there's actually a change in volume
-            if (kotlin.math.abs(newVolume - previousVolume) > 0.001f) {
-                // Determine direction
-                val direction = if (newVolume > previousVolume) "up" else "down"
-                
-                // Update tracked volume
-                currentTrackedVolume = newVolume
-                previousVolume = newVolume
-                
-                // Notify the callback
-                savedCall?.let { call ->
-                    val ret = JSObject()
-                    ret.put("direction", direction)
-                    ret.put("volume", currentTrackedVolume)
-                    call.resolve(ret)
-                }
-            }
-        }
-        
-        override fun deliverSelfNotifications(): Boolean {
-            return true
-        }
     }
 }
