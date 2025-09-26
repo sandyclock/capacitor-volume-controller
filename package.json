@@ -68,7 +68,7 @@
     "android/build.gradle",
     "dist/",
     "ios/Plugin/",
-    "CapacitorVolumeControl.podspec",
+    "CapacitorVolumeController.podspec",
     "!release-helper.js"
   ],
   "repository": {
