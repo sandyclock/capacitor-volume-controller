@@ -1,5 +1,5 @@
 {
-  "name": "@odion-cloud/capacitor-volume-control",
+  "name": "capacitor-volume-control",
   "version": "1.0.13",
   "description": "Capacitor plugin for advanced volume control with native Android and iOS implementations",
   "main": "dist/plugin.cjs.js",
