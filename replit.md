@@ -1,0 +1,83 @@
+# Capacitor Volume Control Plugin
+
+## Overview
+This is a Capacitor plugin library for advanced volume control with native Android and iOS implementations. The plugin provides comprehensive volume management capabilities including volume level control, volume change monitoring, and platform-specific features.
+
+## Project Type
+- **Type**: Capacitor Plugin Library (not an app)
+- **Language**: TypeScript
+- **Build System**: Rollup
+- **Package Manager**: npm
+
+## Project Structure
+- `src/` - TypeScript source code for the plugin
+- `android/` - Native Android implementation (Kotlin)
+- `ios/` - Native iOS implementation (Swift/Objective-C)
+- `docs/` - Documentation website (HTML/CSS/JS)
+- `dist/` - Built plugin files (generated)
+
+## Current Status
+
+✅ **Version 2.0.0 - READY FOR NPM PUBLICATION**
+- Plugin is fully tested and working
+- **NO MainActivity integration required** - uses proven community package!
+- Package ready for production (16.9 kB)
+- Volume button watching powered by `@capacitor-community/volume-buttons`
+- Custom get/set volume methods work perfectly
+- Zero configuration required for users
+- CHANGELOG documents breaking changes and migration steps
+- Ready to publish: `npm publish --access public`
+
+## Implementation Approach
+**Hybrid Approach - Best of Both Worlds:**
+- **Volume Buttons**: Uses proven `@capacitor-community/volume-buttons` package (no MainActivity needed!)
+- **Get/Set Volume**: Our custom Android/iOS native implementation
+- **Result**: One package, zero configuration, everything works!
+
+## Recent Changes
+- **2025-11-08**: Integrated proven community package for volume button watching
+  - Now uses `@capacitor-community/volume-buttons` for button detection (proven to work!)
+  - Custom get/set volume methods kept for complete volume control
+  - NO MainActivity integration required - everything works automatically!
+  - Clean TypeScript wrapper combines both packages into unified API
+  - Package size: 16.9 kB (includes community package)
+  - Zero configuration required for users
+- **2025-11-06**: BREAKING CHANGE - Fixed critical volume watching API flaw (v2.0.0)
+  - Changed from callback-based to event listener pattern using `notifyListeners()`
+  - Android: Updated to use `notifyListeners("volumeButtonPressed", ret)` instead of `call.resolve()`
+  - Android: Switched to ACTION_DOWN for more responsive button detection
+  - iOS: Updated to use `notifyListeners("volumeButtonPressed", data)` instead of `savedCall.resolve()`
+  - TypeScript: Removed callback parameter from `watchVolume()`, added `addListener('volumeButtonPressed', callback)`
+  - Web: Added explicit addListener override to match interface signature
+  - Fixed `suppressVolumeIndicator` and `disableSystemVolumeHandler` options to work correctly
+  - Volume watching now works continuously instead of stopping after first button press
+  - Updated all documentation, tests, and examples to use new API pattern
+  - Updated CHANGELOG.md with version 2.0.0 breaking changes
+- **2025-11-06**: Fixed Android Kotlin version incompatibility issue (#1)
+  - Updated Kotlin version from 1.7.10 to 1.9.10 in android/build.gradle
+  - Updated Android Gradle Plugin from 7.2.1 to 7.4.2
+  - Updated kotlin-stdlib dependency to 1.9.10
+  - Added comprehensive troubleshooting section to README
+  - Documented iOS Pod naming workaround in README and CHANGELOG
+  - Updated CHANGELOG.md with version 1.0.14 changes
+- **2025-11-06**: Initial Replit environment setup
+  - Installed npm dependencies
+  - Built the TypeScript library successfully
+  - Set up documentation server on port 5000 with http-server
+  - Configured deployment for autoscale (static site)
+  - Fixed missing jest-environment-jsdom dependency
+
+## Development Workflow
+1. **Build the library**: `npm run build` - Compiles TypeScript and bundles with Rollup
+2. **Run tests**: `npm test` - Runs Jest test suite
+3. **View documentation**: Documentation website served on port 5000
+
+## Key Scripts
+- `npm run build` - Build the plugin library
+- `npm test` - Run tests
+- `npm run watch` - Watch mode for TypeScript compilation
+- `npm run lint` - Run linting
+- `serve docs -p 5000` - Serve documentation website
+
+## User Preferences
+None set yet.

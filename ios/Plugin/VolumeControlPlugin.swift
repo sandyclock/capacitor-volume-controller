@@ -7,7 +7,6 @@ import AVFAudio
 @objc(VolumeControlPlugin)
 public class VolumeControlPlugin: CAPPlugin {
     
-    private var savedCallID: String? = nil
     private var volumeHandler: VolumeControlHandler!
     
     public override func load() {
@@ -27,7 +26,10 @@ public class VolumeControlPlugin: CAPPlugin {
     
     @objc func getVolumeLevel(_ call: CAPPluginCall) {
         do {
-            // Always get fresh volume from audio session and round to 2 decimals
+            // FORK CHANGE -- upstream 2.0.3 calls `setActive(true)` here too. We do NOT, on
+            // the narrower ground that a plain READ should not mutate global session state.
+            // NOTE (C-18.37): while a capture route is live this read can return a STALE value
+            // regardless -- do not treat getVolumeLevel as authoritative during an agent session.
             let volume = AVAudioSession.sharedInstance().outputVolume
             let roundedVolume = round(volume * 100) / 100
             call.resolve(["value": roundedVolume])
@@ -52,6 +54,13 @@ public class VolumeControlPlugin: CAPPlugin {
             // Return the rounded value after setting
             let roundedValue = round(value * 100) / 100
             call.resolve(["value": roundedValue])
+
+            // Emit an instant change event (KVO will also fire, but this makes it immediate)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                let v = AVAudioSession.sharedInstance().outputVolume
+                let r = round(v * 100) / 100
+                self.notifyListeners("volumeLevelChanged", data: ["value": r])
+            }
         } catch {
             call.reject("Failed to set volume level: \(error.localizedDescription)")
         }
@@ -65,35 +74,60 @@ public class VolumeControlPlugin: CAPPlugin {
         
         let disableSystemVolumeHandler = call.getBool("disableSystemVolumeHandler", false)
         
-        call.keepAlive = true
-        savedCallID = call.callbackId
-        
         volumeHandler.startHandler(disableSystemVolumeHandler)
         
-        let handlerBlock: VolumeButtonBlock = { direction in
-            if let id = self.savedCallID, let savedCall = self.bridge?.savedCall(withID: id) {
-                var jsObject = JSObject()
-                jsObject["direction"] = direction
-                savedCall.resolve(jsObject)
-            }
+        let handlerBlock: VolumeButtonBlock = { [weak self] direction in
+            // 🔴 FORK CHANGE -- upstream captures `self` strongly here (retain cycle).
+            guard let self = self else { return }
+            var jsObject = JSObject()
+            jsObject["direction"] = direction
+            let volume = AVAudioSession.sharedInstance().outputVolume
+            let roundedVolume = round(volume * 100) / 100
+            jsObject["value"] = roundedVolume
+
+            // Back-compat event
+            self.notifyListeners("volumeButtonPressed", data: jsObject)
+
+            // New: always emit current volume instantly
+            var changed = JSObject()
+            changed["value"] = roundedVolume
+            changed["direction"] = direction
+            self.notifyListeners("volumeLevelChanged", data: changed)
         }
         volumeHandler.handlerBlock = handlerBlock
+        
+        call.resolve()
     }
     
+    /// 🔑 FORK ADDITION -- Android-only concept, deliberately a no-op on iOS.
+    ///
+    /// iOS has no per-Activity volume-key routing: while a voice-processing session is open
+    /// the hardware buttons already act on that route, which is exactly the behaviour Android
+    /// needs `setVolumeControlStream` to emulate. Implemented as a resolving no-op so callers
+    /// can invoke it unconditionally without platform branching.
+    @objc func setVolumeControlStream(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
+    /// 🔑 FORK ADDITION -- see `setVolumeControlStream`. No-op on iOS.
+    @objc func clearVolumeControlStream(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
     @objc func clearWatch(_ call: CAPPluginCall) {
         guard volumeHandler.isStarted else {
             call.reject("Volume buttons has not been watched")
             return
         }
         
-        if let id = savedCallID {
-            volumeHandler.stopHandler()
-            if let savedCall = bridge?.savedCall(withID: id) {
-                bridge?.releaseCall(savedCall)
-            }
-            savedCallID = nil
-            call.resolve()
-        }
+        volumeHandler.stopHandler()
+        // 🔴 FORK CHANGE -- upstream leaves handlerBlock installed after a clear.
+        volumeHandler.handlerBlock = nil
+        call.resolve()
+    }
+
+    @objc override public func removeAllListeners(_ call: CAPPluginCall) {
+        super.removeAllListeners(call)
     }
     
     // MARK: - Private Methods
@@ -144,6 +178,12 @@ public class VolumeControlHandler: NSObject {
     
     override public init() {
         appIsActive = true
+        // Matches upstream. An earlier fork revision used `.ambient` on the theory that
+        // `.playback` is output-only and would kill a live getUserMedia capture route.
+        // 🔴 THAT WAS MEASURED FALSE (C-18.37, iPhone 13 Pro / iOS 26.6): under `.playback`
+        // getUserMedia acquired the mic and it stayed `readyState=live muted=false`.
+        // If this is ever changed back to `.ambient`, justify it by SILENT-SWITCH semantics
+        // (`.ambient` obeys the mute switch, `.playback` plays through it) -- never by the mic.
         sessionCategory = AVAudioSession.Category.playback.rawValue
         sessionOptions = AVAudioSession.CategoryOptions.mixWithOthers
         
@@ -183,7 +223,7 @@ public class VolumeControlHandler: NSObject {
     public func stopHandler() {
         guard isStarted else { return }
         isStarted = false
-        volumeView?.isHidden = false
+        volumeView?.isHidden = true
         self.observation = nil
         NotificationCenter.default.removeObserver(self)
     }
@@ -195,6 +235,13 @@ public class VolumeControlHandler: NSObject {
         setInitialVolume()
         do {
             try session?.setCategory(AVAudioSession.Category(rawValue: sessionCategory), options: sessionOptions!)
+            // 🔴 REQUIRED -- do not remove. `outputVolume` KVO does NOT fire on an INACTIVE
+            // session: with this line absent the observer never fires at all, and the feature
+            // only appears to work after an accidental background->foreground cycle (which
+            // activates the session via `applicationDidChangeActive`). Measured in C-18.37.
+            // An earlier fork revision removed this to "protect the agent's mic route"; that
+            // was backwards -- activation never threatened the mic; a LIVE MIC kills the
+            // volume observation, which no amount of not-activating can fix.
             try session?.setActive(true)
         } catch {
             print("Error setupSession: \(error)")

@@ -2,6 +2,14 @@
 
 A Capacitor plugin for advanced volume control with native Android and iOS implementations. This plugin provides comprehensive volume management capabilities including volume level control, volume change monitoring, and platform-specific features.
 
+**Published on npm** · [capacitor-volume-controller](https://www.npmjs.com/package/capacitor-volume-controller) · **Supports Capacitor 5, 6, 7, and 8**
+
+> **This is a fork.** Upstream is [odion-cloud/capacitor-volume-control](https://github.com/odion-cloud/capacitor-volume-control);
+> this package is published as `capacitor-volume-controller` and is rebased on upstream **2.0.3**.
+> Divergences from upstream (and why) are documented in [FORK.md](FORK.md); the device
+> verification procedure is in [VERIFY.md](VERIFY.md).
+
+
 ## Features
 
 - 🔊 **Volume Level Control**: Get and set volume levels for different audio streams
@@ -17,17 +25,22 @@ A Capacitor plugin for advanced volume control with native Android and iOS imple
 ## ⚠️ Migration Notice
 
 **v2.0+ Breaking Change:**
-- The event listener pattern (`addListener('volumeChanged', ...)`) and `event.level` are no longer supported.
-- Use only `watchVolume(options, callback)` for hardware button events. The callback receives `{ direction: 'up' | 'down' }`.
+- The callback parameter in `watchVolume(options, callback)` is no longer supported.
+- Use the event listener pattern `addListener('volumeButtonPressed', callback)` instead.
+- The callback receives `{ direction: 'up' | 'down' }`.
 
 ---
 
 ## Installation
 
 ```bash
-npm install @odion-cloud/capacitor-volume-control
+npm install capacitor-volume-controller
 npx cap sync
 ```
+
+### ✅ No MainActivity Integration Required!
+
+This plugin uses `@capacitor-community/volume-buttons` for hardware button detection, which means **no MainActivity code changes needed**. Just install and use!
 
 ## Setup
 
@@ -38,7 +51,7 @@ npm install
 
 2. Add the plugin:
 ```bash
-npm install @odion-cloud/capacitor-volume-control
+npm install capacitor-volume-controller
 ```
 
 3. Sync with native platforms:
@@ -51,7 +64,7 @@ npx cap sync
 ### Basic Volume Control
 
 ```typescript
-import { VolumeControl, VolumeType } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl, VolumeType } from 'capacitor-volume-controller';
 
 // Get current volume
 const volume = await VolumeControl.getVolumeLevel();
@@ -64,22 +77,25 @@ await VolumeControl.setVolumeLevel({ value: 0.5 });
 ### Volume Watching
 
 ```typescript
-// Use watchVolume with callback
+// First, add the event listener
+await VolumeControl.addListener('volumeButtonPressed', (event) => {
+  console.log('Volume button pressed:', event.direction); // 'up' or 'down'
+});
+
+// Then start watching
 await VolumeControl.watchVolume({
   disableSystemVolumeHandler: true, // iOS only
   suppressVolumeIndicator: true,    // Android only
-}, (event) => {
-  console.log('Volume button pressed:', event.direction);
 });
 
-// Stop watching
+// Stop watching when done
 await VolumeControl.clearWatch();
 ```
 
 ### Advanced Usage
 
 ```typescript
-import { VolumeControl, VolumeType } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl, VolumeType } from 'capacitor-volume-controller';
 
 class VolumeService {
   private isWatching = false;
@@ -108,10 +124,14 @@ class VolumeService {
     if (this.isWatching) return;
 
     try {
+      // Add listener first
+      await VolumeControl.addListener('volumeButtonPressed', this.handleVolumeChange.bind(this));
+      
+      // Then start watching
       await VolumeControl.watchVolume({
         disableSystemVolumeHandler: true,
         suppressVolumeIndicator: true
-      }, this.handleVolumeChange.bind(this));
+      });
       
       this.isWatching = true;
       console.log('Started volume watching');
@@ -165,11 +185,14 @@ await volumeService.stopWatching();
 ### Android Specific
 
 ```typescript
+// Add listener
+await VolumeControl.addListener('volumeButtonPressed', (event) => {
+  console.log('Volume button pressed:', event.direction);
+});
+
 // Suppress volume indicator on Android
 await VolumeControl.watchVolume({
   suppressVolumeIndicator: true
-}, (event) => {
-  console.log('Volume button pressed:', event.direction);
 });
 
 // Control different volume types
@@ -182,11 +205,14 @@ await VolumeControl.setVolumeLevel({
 ### iOS Specific
 
 ```typescript
+// Add listener
+await VolumeControl.addListener('volumeButtonPressed', (event) => {
+  console.log('Volume button pressed:', event.direction);
+});
+
 // Disable system volume handler on iOS
 await VolumeControl.watchVolume({
   disableSystemVolumeHandler: true
-}, (event) => {
-  console.log('Volume button pressed:', event.direction);
 });
 
 // Control voice call volume
@@ -210,8 +236,8 @@ try {
 }
 
 try {
-  await VolumeControl.watchVolume({}, callback);
-  await VolumeControl.watchVolume({}, callback); // This will fail
+  await VolumeControl.watchVolume({});
+  await VolumeControl.watchVolume({}); // This will fail
 } catch (error) {
   if (error.message.includes('already been watched')) {
     console.error('Volume watching is already active');
@@ -223,7 +249,7 @@ try {
 
 ```typescript
 import { useEffect, useState } from 'react';
-import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl } from 'capacitor-volume-controller';
 
 export function useVolumeControl() {
   const [volume, setVolume] = useState(0.5);
@@ -245,13 +271,18 @@ export function useVolumeControl() {
     if (isWatching) return;
 
     try {
+      // Add listener first
+      await VolumeControl.addListener('volumeButtonPressed', (event) => {
+        console.log('Volume button pressed:', event.direction);
+        // You may want to update UI or state here
+      });
+      
+      // Then start watching
       await VolumeControl.watchVolume({
         disableSystemVolumeHandler: true,
         suppressVolumeIndicator: true
-      }, (event) => {
-        // You may want to update UI or state here
-        console.log('Volume button pressed:', event.direction);
       });
+      
       setIsWatching(true);
     } catch (error) {
       console.error('Failed to start watching:', error);
@@ -290,7 +321,7 @@ export function useVolumeControl() {
 
 ```typescript
 import { ref, onMounted, onUnmounted } from 'vue';
-import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl } from 'capacitor-volume-controller';
 
 export function useVolumeControl() {
   const volume = ref(0.5);
@@ -314,12 +345,17 @@ export function useVolumeControl() {
     if (isWatching.value) return;
 
     try {
+      // Add listener first
+      await VolumeControl.addListener('volumeButtonPressed', (event) => {
+        console.log('Volume button pressed:', event.direction);
+      });
+      
+      // Then start watching
       await VolumeControl.watchVolume({
         disableSystemVolumeHandler: true,
         suppressVolumeIndicator: true
-      }, (event) => {
-        console.log('Volume button pressed:', event.direction);
       });
+      
       isWatching.value = true;
     } catch (error) {
       console.error('Failed to start watching:', error);
@@ -359,7 +395,7 @@ export function useVolumeControl() {
 ```typescript
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
-import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl } from 'capacitor-volume-controller';
 
 @Injectable({
   providedIn: 'root'
@@ -388,13 +424,18 @@ export class VolumeService {
     if (this.isWatchingSubject.value) return;
 
     try {
+      // Add listener first
+      await VolumeControl.addListener('volumeButtonPressed', (event) => {
+        console.log('Volume button pressed:', event.direction);
+        // You may want to update with actual logic
+      });
+      
+      // Then start watching
       await VolumeControl.watchVolume({
         disableSystemVolumeHandler: true,
         suppressVolumeIndicator: true
-      }, (event) => {
-        this.volumeSubject.next(0); // You may want to update with actual logic
-        console.log('Volume button pressed:', event.direction);
       });
+      
       this.isWatchingSubject.next(true);
     } catch (error) {
       console.error('Failed to start watching:', error);
@@ -446,6 +487,11 @@ npx cap run ios
 ```
 
 ## Platform Support
+
+### 📦 Capacitor & npm
+
+- **Capacitor**: Compatible with Capacitor **5**, **6**, **7**, and **8**.
+- **npm**: Package is published to [npm](https://www.npmjs.com/package/capacitor-volume-controller); releases are pushed to GitHub and then published to npm.
 
 ### 📱 Supported Devices
 
@@ -504,16 +550,26 @@ setVolumeLevel({
 // Returns: { value: number } (the new volume level)
 ```
 
-#### `watchVolume(options, callback)`
-Start watching for volume changes with hardware button detection.
+#### `watchVolume(options)`
+Start watching for volume button presses.
 
 ```typescript
 watchVolume({
   disableSystemVolumeHandler?: boolean;  // iOS: disable system UI
   suppressVolumeIndicator?: boolean;     // Android: hide volume UI
-}, callback: (event: { direction: 'up' | 'down' }) => void): Promise<string>
+}): Promise<void>
+```
 
-// Callback receives: { direction: 'up' | 'down' }
+#### `addListener(eventName, callback)`
+Listen for volume button press events.
+
+```typescript
+addListener(
+  'volumeButtonPressed',
+  callback: (event: { direction: 'up' | 'down' }) => void
+): Promise<PluginListenerHandle>
+
+// Event data: { direction: 'up' | 'down' }
 ```
 
 #### `clearWatch()`
@@ -554,8 +610,8 @@ Common errors and their solutions:
 
 ### Best Practices
 
-1. **Always clean up listeners**: Remove event listeners when components unmount
-2. **Use the callback for volume events**: Use the callback in `watchVolume()` for hardware button events
+1. **Always clean up listeners**: Remove event listeners when components unmount with `removeAllListeners()`
+2. **Add listener before watching**: Call `addListener()` before `watchVolume()` to ensure events are captured
 3. **Handle errors gracefully**: Wrap volume operations in try-catch blocks
 4. **Check watch status**: Use `isWatching()` to avoid duplicate watch calls
 5. **Test on real devices**: Volume watching requires physical hardware
@@ -602,6 +658,69 @@ We welcome contributions! Please see our [Contributing Guide](https://github.com
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/odion-cloud/capacitor-volume-control/blob/main/LICENSE) file for details.
+
+## Troubleshooting
+
+### Android: Kotlin Version Incompatibility
+
+If you encounter the error:
+```
+Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1
+```
+
+**Solution**: Update your project's Kotlin version in `android/build.gradle`:
+
+```groovy
+buildscript {
+    ext.kotlin_version = '1.9.10'  // Update from older version
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+```
+
+This plugin requires Kotlin 1.9.0+ and Android Gradle Plugin 7.4.2+.
+
+### iOS: Pod Name Mismatch
+
+If you're using the scoped npm package name and encounter pod installation issues:
+
+**Symptom**: Pod name in Podfile (`OdionCloudCapacitorVolumeControl`) doesn't match the podspec file name (`CapacitorVolumeControl`)
+
+**Solution**: Reference the package with an alias in `package.json`:
+
+```json
+{
+  "dependencies": {
+    "capacitor-volume-control": "npm:capacitor-volume-controller@^1.0.13"
+  }
+}
+```
+
+Then run:
+```bash
+npm install
+npx cap sync ios
+```
+
+### Other Common Issues
+
+**Volume watching not working on emulators/simulators**
+- Volume watching requires physical hardware buttons
+- Test on real devices for volume button detection
+
+**Permission denied errors**
+- Ensure you've added the required permissions to your AndroidManifest.xml or Info.plist
+- Request permissions at runtime before calling volume control methods
+
+**Build errors after updating**
+- Clean your build folders:
+  ```bash
+  cd android && ./gradlew clean
+  # or
+  cd ios && rm -rf Pods && pod install
+  ```
+- Invalidate caches in Android Studio: File → Invalidate Caches → Restart
 
 ## Changelog
 
