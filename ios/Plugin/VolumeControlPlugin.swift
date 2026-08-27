@@ -7,7 +7,6 @@ import AVFAudio
 @objc(VolumeControlPlugin)
 public class VolumeControlPlugin: CAPPlugin {
     
-    private var savedCallID: String? = nil
     private var volumeHandler: VolumeControlHandler!
     
     public override func load() {
@@ -64,20 +63,37 @@ public class VolumeControlPlugin: CAPPlugin {
         }
         
         let disableSystemVolumeHandler = call.getBool("disableSystemVolumeHandler", false)
-        
-        call.keepAlive = true
-        savedCallID = call.callbackId
-        
+
         volumeHandler.startHandler(disableSystemVolumeHandler)
-        
-        let handlerBlock: VolumeButtonBlock = { direction in
-            if let id = self.savedCallID, let savedCall = self.bridge?.savedCall(withID: id) {
-                var jsObject = JSObject()
-                jsObject["direction"] = direction
-                savedCall.resolve(jsObject)
-            }
+
+        volumeHandler.handlerBlock = { [weak self] direction in
+            guard let self = self else { return }
+            let volume = AVAudioSession.sharedInstance().outputVolume
+            let rounded = round(volume * 100) / 100
+
+            var pressed = JSObject()
+            pressed["direction"] = direction
+            pressed["value"] = rounded
+            self.notifyListeners("volumeButtonPressed", data: pressed)
+
+            var changed = JSObject()
+            changed["value"] = rounded
+            changed["direction"] = direction
+            self.notifyListeners("volumeLevelChanged", data: changed)
         }
-        volumeHandler.handlerBlock = handlerBlock
+
+        // 🔴 FORK CHANGE -- resolve ONCE. This used to set `call.keepAlive = true`, stash the
+        // callbackId, and re-resolve the SAME PluginCall on every press, never resolving the
+        // initial call at all.
+        //
+        // That silently broke the moment this package adopted upstream's 2.0.x TypeScript
+        // contract, which types `watchVolume(options): Promise<void>` with no callback: the
+        // promise would never settle, so `await watchVolume({})` hung forever, and because
+        // nothing ever called notifyListeners, `addListener('volumeButtonPressed')` received
+        // nothing either. Android and web were migrated; iOS was missed.
+        //
+        // Presses now go out as EVENTS, matching Android, web, and upstream.
+        call.resolve()
     }
     
     @objc func clearWatch(_ call: CAPPluginCall) {
@@ -86,16 +102,35 @@ public class VolumeControlPlugin: CAPPlugin {
             return
         }
         
-        if let id = savedCallID {
-            volumeHandler.stopHandler()
-            if let savedCall = bridge?.savedCall(withID: id) {
-                bridge?.releaseCall(savedCall)
-            }
-            savedCallID = nil
-            call.resolve()
-        }
+        // 🔴 FORK CHANGE -- previously the stop was nested inside `if let id = savedCallID`,
+        // so a nil id meant the handler was never stopped AND the call never resolved: the
+        // JS promise hung. With no saved call to release, stop unconditionally and resolve.
+        volumeHandler.stopHandler()
+        volumeHandler.handlerBlock = nil
+        call.resolve()
     }
     
+    /// Explicit override for parity with upstream 2.0.x. `CAPPlugin` supplies a default,
+    /// but upstream declares it and the ObjC bridge is clearer for having it named.
+    @objc override public func removeAllListeners(_ call: CAPPluginCall) {
+        super.removeAllListeners(call)
+    }
+
+    /// 🔑 FORK ADDITION -- Android-only concept, deliberately a no-op on iOS.
+    ///
+    /// iOS has no per-Activity volume-key routing: while a voice-processing session is open
+    /// the hardware buttons already act on that route, which is exactly the behaviour Android
+    /// needs `setVolumeControlStream` to emulate. Implemented as a resolving no-op so callers
+    /// can invoke it unconditionally without platform branching.
+    @objc func setVolumeControlStream(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
+    /// 🔑 FORK ADDITION -- see `setVolumeControlStream`. No-op on iOS.
+    @objc func clearVolumeControlStream(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
     // MARK: - Private Methods
     
     private func setVolume(_ volume: Float) throws {
@@ -144,7 +179,16 @@ public class VolumeControlHandler: NSObject {
     
     override public init() {
         appIsActive = true
-        sessionCategory = AVAudioSession.Category.playback.rawValue
+        // 🔴 FORK CHANGE -- upstream (and capacitor-community/volume-buttons, which upstream
+        // copied) hardcode `.playback` here. That is OUTPUT-ONLY, and WebKit REFUSES
+        // getUserMedia while the session sits in a playback category: calling watchVolume()
+        // during a live microphone session KILLS THE MIC. This plugin only needs to OBSERVE
+        // `outputVolume`; it has no business owning the route.
+        //
+        // `.ambient` is the least invasive category that still permits observation: it is
+        // non-mixing-hostile, respects the silent switch, and -- critically -- does not
+        // tear down an existing recording route the way `.playback` does.
+        sessionCategory = AVAudioSession.Category.ambient.rawValue
         sessionOptions = AVAudioSession.CategoryOptions.mixWithOthers
         
         volumeView = MPVolumeView(
@@ -195,7 +239,11 @@ public class VolumeControlHandler: NSObject {
         setInitialVolume()
         do {
             try session?.setCategory(AVAudioSession.Category(rawValue: sessionCategory), options: sessionOptions!)
-            try session?.setActive(true)
+            // 🔴 FORK CHANGE -- upstream calls `setActive(true)` here. Activating the shared
+            // session from a volume OBSERVER can interrupt whoever currently owns the route.
+            // KVO on `outputVolume` does not require an active session, so we do not take it.
+            // (Upstream 2.0.x went further and added setActive(true) to getVolumeLevel too --
+            // deliberately not adopted.)
         } catch {
             print("Error setupSession: \(error)")
         }
