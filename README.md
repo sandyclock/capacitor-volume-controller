@@ -2,7 +2,13 @@
 
 A Capacitor plugin for advanced volume control with native Android and iOS implementations. This plugin provides comprehensive volume management capabilities including volume level control, volume change monitoring, and platform-specific features.
 
-**Published on npm** · [@odion-cloud/capacitor-volume-control](https://www.npmjs.com/package/@odion-cloud/capacitor-volume-control) · **Supports Capacitor 5, 6, 7, and 8**
+**Published on npm** · [capacitor-volume-controller](https://www.npmjs.com/package/capacitor-volume-controller) · **Supports Capacitor 5, 6, 7, and 8**
+
+> **This is a fork.** Upstream is [odion-cloud/capacitor-volume-control](https://github.com/odion-cloud/capacitor-volume-control);
+> this package is published as `capacitor-volume-controller` and is rebased on upstream **2.0.3**.
+> Divergences from upstream (and why) are documented in [FORK.md](FORK.md); the device
+> verification procedure is in [VERIFY.md](VERIFY.md).
+
 
 ## Features
 
@@ -28,7 +34,7 @@ A Capacitor plugin for advanced volume control with native Android and iOS imple
 ## Installation
 
 ```bash
-npm install @odion-cloud/capacitor-volume-control
+npm install capacitor-volume-controller
 npx cap sync
 ```
 
@@ -45,7 +51,7 @@ npm install
 
 2. Add the plugin:
 ```bash
-npm install @odion-cloud/capacitor-volume-control
+npm install capacitor-volume-controller
 ```
 
 3. Sync with native platforms:
@@ -58,7 +64,7 @@ npx cap sync
 ### Basic Volume Control
 
 ```typescript
-import { VolumeControl, VolumeType } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl, VolumeType } from 'capacitor-volume-controller';
 
 // Get current volume
 const volume = await VolumeControl.getVolumeLevel();
@@ -89,7 +95,7 @@ await VolumeControl.clearWatch();
 ### Advanced Usage
 
 ```typescript
-import { VolumeControl, VolumeType } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl, VolumeType } from 'capacitor-volume-controller';
 
 class VolumeService {
   private isWatching = false;
@@ -243,7 +249,7 @@ try {
 
 ```typescript
 import { useEffect, useState } from 'react';
-import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl } from 'capacitor-volume-controller';
 
 export function useVolumeControl() {
   const [volume, setVolume] = useState(0.5);
@@ -315,7 +321,7 @@ export function useVolumeControl() {
 
 ```typescript
 import { ref, onMounted, onUnmounted } from 'vue';
-import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl } from 'capacitor-volume-controller';
 
 export function useVolumeControl() {
   const volume = ref(0.5);
@@ -389,7 +395,7 @@ export function useVolumeControl() {
 ```typescript
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
-import { VolumeControl } from '@odion-cloud/capacitor-volume-control';
+import { VolumeControl } from 'capacitor-volume-controller';
 
 @Injectable({
   providedIn: 'root'
@@ -485,7 +491,7 @@ npx cap run ios
 ### 📦 Capacitor & npm
 
 - **Capacitor**: Compatible with Capacitor **5**, **6**, **7**, and **8**.
-- **npm**: Package is published to [npm](https://www.npmjs.com/package/@odion-cloud/capacitor-volume-control); releases are pushed to GitHub and then published to npm.
+- **npm**: Package is published to [npm](https://www.npmjs.com/package/capacitor-volume-controller); releases are pushed to GitHub and then published to npm.
 
 ### 📱 Supported Devices
 
@@ -686,7 +692,7 @@ If you're using the scoped npm package name and encounter pod installation issue
 ```json
 {
   "dependencies": {
-    "capacitor-volume-control": "npm:@odion-cloud/capacitor-volume-control@^1.0.13"
+    "capacitor-volume-control": "npm:capacitor-volume-controller@^1.0.13"
   }
 }
 ```

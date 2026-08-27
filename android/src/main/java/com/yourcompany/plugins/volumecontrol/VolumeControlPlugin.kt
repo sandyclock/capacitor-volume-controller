@@ -2,11 +2,8 @@ package com.yourcompany.plugins.volumecontrol
 
 import android.content.Context
 import android.media.AudioManager
-import android.database.ContentObserver
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
+import android.view.KeyEvent
+import android.view.View
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -14,22 +11,59 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import kotlin.math.round
 
+/**
+ * capacitor-volume-controller -- FORK of odion-cloud/capacitor-volume-control.
+ *
+ * The JS contract matches upstream 2.0.x (event-based `watchVolume` + `addListener`).
+ * The Android implementation deliberately does NOT match upstream. See FORK.md.
+ *
+ * Two divergences, both intentional:
+ *
+ *  1. Upstream 2.0.x replaced the WebView key listener with a `ContentObserver` on
+ *     `Settings.System`. An observer can NOTICE a volume change; it cannot INTERCEPT a
+ *     keypress, and upstream's is hardcoded to STREAM_MUSIC, so it never sees changes on
+ *     any other stream. We keep the key listener.
+ *
+ *  2. We add `setVolumeControlStream` / `clearVolumeControlStream`, which is the
+ *     platform-sanctioned way to point the hardware volume keys at the stream your audio
+ *     actually plays on. Upstream has no equivalent.
+ */
 @CapacitorPlugin(name = "VolumeControl")
 class VolumeControlPlugin : Plugin() {
-    
+
     private lateinit var audioManager: AudioManager
-    private var volumeObserver: ContentObserver? = null
-    private var isWatching = false
-    private var lastReported: Float? = null
-    
+    private var isStarted = false
+    private var suppressVolumeIndicator = false
+
+    /**
+     * When true the key listener consumes volume keys and adjusts the bound stream itself.
+     *
+     * ⚠️ OEM FALLBACK ONLY -- off by default, and it should stay off. Consuming volume keys
+     * takes them away from TalkBack and from the system HUD, and if the adjustment below
+     * ever fails the buttons become dead rather than merely misrouted. The supported path is
+     * `setVolumeControlStream()`, which lets the SYSTEM handle the keys. Turn this on only
+     * for a device proven to ignore `setVolumeControlStream`.
+     */
+    private var handleKeysDirectly = false
+
+    /** The stream the direct-handling fallback adjusts. Follows `setVolumeControlStream`. */
+    private var boundStreamType: Int = AudioManager.STREAM_MUSIC
+
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
-    
+
     private fun roundToTwoDecimals(value: Float): Float {
         return (round(value * 100f) / 100f).coerceIn(0f, 1f)
     }
-    
+
+    /**
+     * Ported from upstream 2.0.3 -- the one piece of their rewrite worth having.
+     *
+     * Our own `VolumeType` TS enum has always declared these eight values; before this the
+     * Kotlin ignored the option entirely and hardcoded STREAM_MUSIC, so the enum was
+     * decorative. `null` / unknown falls back to MUSIC so existing callers are unaffected.
+     */
     private fun streamTypeFromString(type: String?): Int {
         return when (type?.lowercase()) {
             "voice_call" -> AudioManager.STREAM_VOICE_CALL
@@ -50,21 +84,19 @@ class VolumeControlPlugin : Plugin() {
         if (maxVolume <= 0) return 0f
         return roundToTwoDecimals(currentVolume.toFloat() / maxVolume.toFloat())
     }
-    
+
     @PluginMethod
     fun getVolumeLevel(call: PluginCall) {
         try {
             val streamType = streamTypeFromString(call.getString("type"))
-            val normalizedVolume = getCurrentVolume(streamType)
-            
             val ret = JSObject()
-            ret.put("value", normalizedVolume)
+            ret.put("value", getCurrentVolume(streamType))
             call.resolve(ret)
         } catch (e: Exception) {
             call.reject("Failed to get volume level", e)
         }
     }
-    
+
     @PluginMethod
     fun setVolumeLevel(call: PluginCall) {
         try {
@@ -72,110 +104,198 @@ class VolumeControlPlugin : Plugin() {
                 call.reject("Missing required parameter: value")
                 return
             }
-            
             if (value < 0f || value > 1f) {
                 call.reject("Volume value must be between 0 and 1")
                 return
             }
 
-            val streamType = streamTypeFromString(call.getString("type"))
+            val type = call.getString("type")
+            val streamType = streamTypeFromString(type)
             val maxVolume = audioManager.getStreamMaxVolume(streamType)
-            val roundedValue = roundToTwoDecimals(value)
-            val targetVolumeLevel = (roundedValue * maxVolume).toInt()
-            
-            // Use 0 for flags to avoid showing the UI
+            // `getCurrentVolume` already guards this; the setter did not. A stream can report
+            // max 0 on fixed-volume devices (`AudioManager.isVolumeFixed()`, e.g. some
+            // TV/dock/automotive outputs), where setStreamVolume is refused. Reject clearly
+            // instead of computing an index of 0 and letting the platform throw.
+            if (maxVolume <= 0) {
+                call.reject("Stream $streamType reports no adjustable volume range on this device")
+                return
+            }
+            // 🔴 FORK FIX 2026-08-26 -- this line used to read:
+            //     (roundToTwoDecimals(value) * maxVolume).toInt()
+            // which quantised the input to 2 decimals and THEN truncated, losing a whole step.
+            // Worked example on STREAM_VOICE_CALL (max 15): asking for index 8 sends
+            // 8/15 = 0.5333; roundToTwoDecimals -> 0.53; 0.53 * 15 = 7.95; .toInt() -> 7.
+            // The caller asked for 8 and the device landed on 7.
+            //
+            // It also broke ROUND-TRIPPING, which matters because the design reads the current
+            // level and later writes it back (D-11 / first-run adoption): getCurrentVolume
+            // reports 2dp, so read(8) -> 0.53 -> write -> 7. Every read/write cycle drifted down.
+            //
+            // Round to the NEAREST index off the raw value, and clamp to the stream's range.
+            // roundToTwoDecimals stays on the READ path, where reporting a 2dp fraction is fine.
+            val targetVolumeLevel = round(value * maxVolume).toInt().coerceIn(0, maxVolume)
+
+            // flags 0 -- do not show the system volume UI for a programmatic set.
             audioManager.setStreamVolume(streamType, targetVolumeLevel, 0)
-            
-            // Get the actual volume after setting it
+
+            // Report what the device ACTUALLY landed on, not what was asked for. Streams have
+            // coarse integer steps (STREAM_VOICE_CALL is often 5-7 against 15 for MUSIC), so
+            // the granted value can differ noticeably from the requested one.
             val actualVolume = getCurrentVolume(streamType)
-            
             val ret = JSObject()
             ret.put("value", actualVolume)
             call.resolve(ret)
 
-            // Emit an instant change event
-            emitVolumeChanged(actualVolume, null, call.getString("type"))
+            emitVolumeChanged(actualVolume, null, type)
         } catch (e: Exception) {
             call.reject("Failed to set volume level", e)
         }
     }
 
+    /**
+     * 🔑 FORK ADDITION. Bind the Activity's hardware volume keys to a stream.
+     *
+     * An Activity routes the volume keys to STREAM_MUSIC by default, so an app playing on
+     * another stream sees the buttons move a stream nothing is playing on.
+     */
     @PluginMethod
-    fun watchVolume(call: PluginCall) {
-        if (isWatching) {
-            call.reject("Volume is already being watched")
-            return
-        }
-
-        val handler = Handler(Looper.getMainLooper())
-        val streamType = streamTypeFromString(null)
-
-        volumeObserver = object : ContentObserver(handler) {
-            override fun onChange(selfChange: Boolean) {
-                super.onChange(selfChange)
-                val current = getCurrentVolume(streamType)
-                val prev = lastReported
-                val direction = if (prev != null) {
-                    if (current > prev) "up" else if (current < prev) "down" else null
-                } else null
-                emitVolumeChanged(current, direction, null)
-            }
-        }
-
+    fun setVolumeControlStream(call: PluginCall) {
         try {
-            context.contentResolver.registerContentObserver(
-                Settings.System.CONTENT_URI,
-                true,
-                volumeObserver!!
-            )
+            // `activity` is non-null once the plugin is attached to a BridgeActivity, but a
+            // call arriving before attach would NPE inside runOnUiThread. Reject instead.
+            val act = activity ?: run {
+                call.reject("No activity attached; cannot bind the volume control stream")
+                return
+            }
+            val type = call.getString("type")
+            val streamType = streamTypeFromString(type)
+            boundStreamType = streamType
+            act.runOnUiThread { act.volumeControlStream = streamType }
+            call.resolve()
         } catch (e: Exception) {
-            volumeObserver = null
-            call.reject("Failed to register volume observer", e)
-            return
+            call.reject("Failed to set volume control stream", e)
         }
-
-        isWatching = true
-        // Emit initial volume immediately
-        val initial = getCurrentVolume(streamType)
-        emitVolumeChanged(initial, null, null)
-        call.resolve()
     }
 
+    /**
+     * 🔑 FORK ADDITION. Restore the platform default binding.
+     *
+     * Call this when the session that requested a binding ends -- otherwise the device's
+     * volume keys stay pointed at that stream for the rest of the Activity's life, which on a
+     * personal phone means the user's media keys silently keep controlling the call stream.
+     */
     @PluginMethod
-    fun clearWatch(call: PluginCall) {
-        if (!isWatching) {
-            call.reject("Volume is not being watched")
-            return
-        }
+    fun clearVolumeControlStream(call: PluginCall) {
         try {
-            if (volumeObserver != null) {
-                context.contentResolver.unregisterContentObserver(volumeObserver!!)
+            val act = activity ?: run {
+                call.reject("No activity attached; cannot clear the volume control stream")
+                return
             }
-        } catch (_: Exception) {
+            boundStreamType = AudioManager.STREAM_MUSIC
+            act.runOnUiThread {
+                act.volumeControlStream = AudioManager.USE_DEFAULT_STREAM_TYPE
+            }
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to clear volume control stream", e)
         }
-        volumeObserver = null
-        isWatching = false
-        call.resolve()
     }
 
     @PluginMethod
     fun isWatching(call: PluginCall) {
         val ret = JSObject()
-        ret.put("value", isWatching)
+        ret.put("value", isStarted)
         call.resolve(ret)
     }
 
-    private fun emitVolumeChanged(value: Float, direction: String?, type: String?) {
-        lastReported = value
+    /**
+     * Upstream 2.0.x contract: resolves immediately; presses arrive via `addListener`.
+     *
+     * The previous signature kept the PluginCall alive and resolved it repeatedly -- a
+     * Capacitor anti-pattern that leaks a saved call for the lifetime of the watch.
+     *
+     * ⚠️ The listener does NOT consume the key by default (`return false`), so the system
+     * still applies its own volume handling against whatever stream the Activity is bound to.
+     * That is the point: pair this with `setVolumeControlStream()` and the system does the
+     * work, draws the correct HUD, and accessibility keeps working. We only observe.
+     */
+    @PluginMethod
+    fun watchVolume(call: PluginCall) {
+        if (isStarted) {
+            call.reject("Volume buttons has already been watched")
+            return
+        }
 
-        // New event: includes volume value
+        suppressVolumeIndicator = call.getBoolean("suppressVolumeIndicator") ?: false
+        handleKeysDirectly = call.getBoolean("handleKeysDirectly") ?: false
+
+        bridge.webView.setOnKeyListener(
+            object : View.OnKeyListener {
+                override fun onKey(v: View?, keyCode: Int, event: KeyEvent?): Boolean {
+                    if (keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
+                        keyCode != KeyEvent.KEYCODE_VOLUME_DOWN
+                    ) {
+                        return false
+                    }
+
+                    val isUp = keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                    val direction = if (isUp) "up" else "down"
+
+                    if (event?.action == KeyEvent.ACTION_UP) {
+                        if (handleKeysDirectly) {
+                            // OEM fallback: adjust the bound stream ourselves.
+                            val flag =
+                                if (suppressVolumeIndicator) 0 else AudioManager.FLAG_SHOW_UI
+                            audioManager.adjustStreamVolume(
+                                boundStreamType,
+                                if (isUp) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                                flag
+                            )
+                        }
+                        emitVolumeChanged(getCurrentVolume(boundStreamType), direction, null)
+                    }
+
+                    // 🔴 Consume ONLY when we took responsibility for the adjustment.
+                    //
+                    // This previously read `handleKeysDirectly || suppressVolumeIndicator`,
+                    // which contradicted the sentence above it: with suppressVolumeIndicator
+                    // alone the key was CONSUMED while the adjust block -- gated on
+                    // handleKeysDirectly -- never ran. Neither the system nor the plugin
+                    // changed the volume, so the buttons went DEAD rather than merely
+                    // misrouted: precisely the failure this comment claimed to prevent.
+                    // (Inherited from 1.0.13, carried through the rewrite unexamined.)
+                    //
+                    // To hide the HUD *and* keep the buttons working, pass BOTH flags:
+                    // handleKeysDirectly adjusts, suppressVolumeIndicator drops FLAG_SHOW_UI.
+                    return handleKeysDirectly
+                }
+            }
+        )
+
+        isStarted = true
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun clearWatch(call: PluginCall) {
+        if (!isStarted) {
+            call.reject("Volume buttons has not been watched")
+            return
+        }
+        bridge.webView.setOnKeyListener(null)
+        isStarted = false
+        handleKeysDirectly = false
+        suppressVolumeIndicator = false
+        call.resolve()
+    }
+
+    private fun emitVolumeChanged(value: Float, direction: String?, type: String?) {
         val changed = JSObject()
         changed.put("value", value)
         if (direction != null) changed.put("direction", direction)
         if (type != null) changed.put("type", type)
         notifyListeners("volumeLevelChanged", changed)
 
-        // Back-compat event: direction only (optionally includes value)
         if (direction != null) {
             val pressed = JSObject()
             pressed.put("direction", direction)

@@ -99,4 +99,18 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
   async removeAllListeners(): Promise<void> {
     return super.removeAllListeners();
   }
+
+  /**
+   * 🔑 FORK ADDITION. Android-only concept; there is no web equivalent -- a browser has no
+   * Activity and no hardware volume-key routing. Intentionally a silent no-op so callers can
+   * invoke it unconditionally without platform branching.
+   */
+  async setVolumeControlStream(_options?: VolumeOptions): Promise<void> {
+    return;
+  }
+
+  /** 🔑 FORK ADDITION. See `setVolumeControlStream` -- no-op on web. */
+  async clearVolumeControlStream(): Promise<void> {
+    return;
+  }
 }

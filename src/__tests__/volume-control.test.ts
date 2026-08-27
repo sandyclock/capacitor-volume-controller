@@ -1,3 +1,17 @@
+/*
+ * Web-implementation tests.
+ *
+ * ⚠️ Rewritten for the upstream 2.0.x event contract (FORK.md). The previous version was
+ * written against our old 1.0.13 API and asserted things that no longer exist:
+ *
+ *   - `watchVolume(options, callback)` -- the keep-alive callback form. It is now
+ *     `watchVolume(options)` and presses arrive via `addListener`.
+ *   - an event named `volumeChanged` -- there is no such event. The names are
+ *     `volumeButtonPressed` and `volumeLevelChanged`.
+ *
+ * These tests exercise the WEB implementation only, which is a mock: browsers expose no
+ * system volume. They verify the CONTRACT (shapes, guards, watch state), not audio.
+ */
 import { VolumeControlWeb } from '../web';
 import { VolumeType } from '../definitions';
 
@@ -8,131 +22,139 @@ describe('VolumeControlWeb', () => {
     volumeControl = new VolumeControlWeb();
   });
 
-  afterEach(() => {
-    // Clean up any active watches
-    volumeControl.clearWatch();
+  afterEach(async () => {
+    // clearWatch() REJECTS when nothing is being watched, and most tests here never start a
+    // watch. The previous version called it unconditionally and un-awaited, which produced an
+    // unhandled rejection on every such test. Guard on the actual state instead.
+    if ((await volumeControl.isWatching()).value) {
+      await volumeControl.clearWatch();
+    }
   });
 
   describe('getVolumeLevel', () => {
-    it('should return a volume level between 0 and 1', async () => {
+    it('returns a level within [0, 1]', async () => {
       const result = await volumeControl.getVolumeLevel();
       expect(result.value).toBeGreaterThanOrEqual(0);
       expect(result.value).toBeLessThanOrEqual(1);
     });
 
-    it('should handle volume type parameter', async () => {
+    it('accepts a volume type', async () => {
       const result = await volumeControl.getVolumeLevel({ type: VolumeType.MUSIC });
+      expect(result.value).toBeDefined();
+    });
+
+    it('accepts VOICE_CALL -- the type our Android implementation actually needs', async () => {
+      const result = await volumeControl.getVolumeLevel({ type: VolumeType.VOICE_CALL });
       expect(result.value).toBeDefined();
     });
   });
 
   describe('setVolumeLevel', () => {
-    it('should accept valid volume values', async () => {
+    it('accepts valid values', async () => {
       const result = await volumeControl.setVolumeLevel({ value: 0.5 });
       expect(result.value).toBe(0.5);
     });
 
-    it('should reject volume values below 0', async () => {
+    it('rejects values below 0', async () => {
       await expect(volumeControl.setVolumeLevel({ value: -0.1 })).rejects.toThrow();
     });
 
-    it('should reject volume values above 1', async () => {
+    it('rejects values above 1', async () => {
       await expect(volumeControl.setVolumeLevel({ value: 1.1 })).rejects.toThrow();
     });
 
-    it('should handle volume type parameter', async () => {
-      const result = await volumeControl.setVolumeLevel({ 
-        value: 0.7, 
-        type: VolumeType.SYSTEM 
+    it('accepts a volume type', async () => {
+      const result = await volumeControl.setVolumeLevel({
+        value: 0.7,
+        type: VolumeType.SYSTEM,
       });
       expect(result.value).toBe(0.7);
     });
   });
 
   describe('watchVolume', () => {
-    it('should start watching volume changes', async () => {
+    it('takes options only -- no callback argument', async () => {
       await volumeControl.watchVolume({});
-      
-      const watchStatus = await volumeControl.isWatching();
-      expect(watchStatus.value).toBe(true);
+      expect((await volumeControl.isWatching()).value).toBe(true);
     });
 
-    it('should reject if already watching', async () => {
+    it('rejects a second concurrent watch', async () => {
       await volumeControl.watchVolume({});
-      
       await expect(volumeControl.watchVolume({})).rejects.toThrow();
     });
 
-    it('should handle watch options', async () => {
+    it('accepts watch options', async () => {
       await volumeControl.watchVolume({
         disableSystemVolumeHandler: true,
-        suppressVolumeIndicator: true
+        suppressVolumeIndicator: true,
       });
-      
-      const watchStatus = await volumeControl.isWatching();
-      expect(watchStatus.value).toBe(true);
-    });
-
-    it('should add event listener for volume button presses', async () => {
-      const callback = jest.fn();
-      
-      const listener = await volumeControl.addListener('volumeButtonPressed', callback);
-      expect(listener).toBeDefined();
-      expect(typeof listener.remove).toBe('function');
+      expect((await volumeControl.isWatching()).value).toBe(true);
     });
   });
 
   describe('clearWatch', () => {
-    it('should clear volume watch', async () => {
+    it('clears an active watch', async () => {
       await volumeControl.watchVolume({});
       await volumeControl.clearWatch();
-      
-      const watchStatus = await volumeControl.isWatching();
-      expect(watchStatus.value).toBe(false);
+      expect((await volumeControl.isWatching()).value).toBe(false);
+    });
+
+    it('rejects when nothing is being watched', async () => {
+      await expect(volumeControl.clearWatch()).rejects.toThrow();
     });
   });
 
   describe('isWatching', () => {
-    it('should return false initially', async () => {
-      const watchStatus = await volumeControl.isWatching();
-      expect(watchStatus.value).toBe(false);
-    });
-
-    it('should return true when watching', async () => {
-      await volumeControl.watchVolume({});
-      
-      const watchStatus = await volumeControl.isWatching();
-      expect(watchStatus.value).toBe(true);
+    it('is false initially', async () => {
+      expect((await volumeControl.isWatching()).value).toBe(false);
     });
   });
 
   describe('event listeners', () => {
-    it('should add and remove event listeners', async () => {
-      const callback = jest.fn();
-      
-      const listener = await volumeControl.addListener('volumeButtonPressed', callback);
+    it('registers volumeButtonPressed', async () => {
+      const listener = await volumeControl.addListener('volumeButtonPressed', jest.fn());
       expect(listener).toBeDefined();
-      
-      // Remove listener
-      if (listener && typeof listener.remove === 'function') {
-        await listener.remove();
-      }
-      
-      // Remove all listeners
-      await volumeControl.removeAllListeners();
+      expect(typeof listener.remove).toBe('function');
     });
 
-    it('should remove all listeners', async () => {
-      const callback1 = jest.fn();
-      const callback2 = jest.fn();
-      
-      await volumeControl.addListener('volumeButtonPressed', callback1);
-      await volumeControl.addListener('volumeButtonPressed', callback2);
-      
-      await volumeControl.removeAllListeners();
-      
-      // Should not throw
-      expect(true).toBe(true);
+    it('registers volumeLevelChanged', async () => {
+      const listener = await volumeControl.addListener('volumeLevelChanged', jest.fn());
+      expect(listener).toBeDefined();
+    });
+
+    it('emits volumeLevelChanged when the level is set', async () => {
+      const seen = jest.fn();
+      await volumeControl.addListener('volumeLevelChanged', seen);
+      await volumeControl.setVolumeLevel({ value: 0.42 });
+      expect(seen).toHaveBeenCalledWith(expect.objectContaining({ value: 0.42 }));
+    });
+
+    it('removes all listeners', async () => {
+      await volumeControl.addListener('volumeLevelChanged', jest.fn());
+      await volumeControl.addListener('volumeButtonPressed', jest.fn());
+      await expect(volumeControl.removeAllListeners()).resolves.not.toThrow();
+    });
+  });
+
+  /*
+   * 🔑 FORK ADDITIONS. Android-only in effect; the web implementation is a deliberate no-op
+   * so callers can invoke them unconditionally without platform branching. These tests exist
+   * to pin that no-op down -- if either ever starts throwing on web, every caller that does
+   * not branch on platform breaks at once.
+   */
+  describe('volume control stream (fork addition)', () => {
+    it('setVolumeControlStream resolves as a no-op on web', async () => {
+      await expect(
+        volumeControl.setVolumeControlStream({ type: VolumeType.VOICE_CALL }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('setVolumeControlStream resolves with no options', async () => {
+      await expect(volumeControl.setVolumeControlStream()).resolves.toBeUndefined();
+    });
+
+    it('clearVolumeControlStream resolves as a no-op on web', async () => {
+      await expect(volumeControl.clearVolumeControlStream()).resolves.toBeUndefined();
     });
   });
 });

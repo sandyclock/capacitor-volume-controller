@@ -14,5 +14,9 @@
     "skipLibCheck": true
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "src/__tests__"]
+  // ⚠️ PRE-EXISTING defect: `__tests__` was compiled into dist/esm, and package.json
+  // `files` ships `dist/`, so the published tarball carried the test suite. Tests are
+  // also re-discovered from dist on the next jest run, which is why two phantom suites
+  // failed. Excluded from the build; jest still runs them from src/.
+  "exclude": ["node_modules", "dist", "src/**/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts"]
 }

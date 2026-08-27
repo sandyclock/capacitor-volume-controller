@@ -26,8 +26,9 @@ public class VolumeControlPlugin: CAPPlugin {
     
     @objc func getVolumeLevel(_ call: CAPPluginCall) {
         do {
-            // Ensure session is active so outputVolume is up-to-date
-            try AVAudioSession.sharedInstance().setActive(true, options: [])
+            // 🔴 FORK CHANGE -- upstream 2.0.3 calls `setActive(true)` here. Activating the
+            // SHARED AVAudioSession from a plain READ is route-hostile: it can tear down a
+            // live capture route mid-agent. outputVolume is readable without it.
             let volume = AVAudioSession.sharedInstance().outputVolume
             let roundedVolume = round(volume * 100) / 100
             call.resolve(["value": roundedVolume])
@@ -74,7 +75,9 @@ public class VolumeControlPlugin: CAPPlugin {
         
         volumeHandler.startHandler(disableSystemVolumeHandler)
         
-        let handlerBlock: VolumeButtonBlock = { direction in
+        let handlerBlock: VolumeButtonBlock = { [weak self] direction in
+            // 🔴 FORK CHANGE -- upstream captures `self` strongly here (retain cycle).
+            guard let self = self else { return }
             var jsObject = JSObject()
             jsObject["direction"] = direction
             let volume = AVAudioSession.sharedInstance().outputVolume
@@ -95,6 +98,21 @@ public class VolumeControlPlugin: CAPPlugin {
         call.resolve()
     }
     
+    /// 🔑 FORK ADDITION -- Android-only concept, deliberately a no-op on iOS.
+    ///
+    /// iOS has no per-Activity volume-key routing: while a voice-processing session is open
+    /// the hardware buttons already act on that route, which is exactly the behaviour Android
+    /// needs `setVolumeControlStream` to emulate. Implemented as a resolving no-op so callers
+    /// can invoke it unconditionally without platform branching.
+    @objc func setVolumeControlStream(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
+    /// 🔑 FORK ADDITION -- see `setVolumeControlStream`. No-op on iOS.
+    @objc func clearVolumeControlStream(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
     @objc func clearWatch(_ call: CAPPluginCall) {
         guard volumeHandler.isStarted else {
             call.reject("Volume buttons has not been watched")
@@ -102,6 +120,8 @@ public class VolumeControlPlugin: CAPPlugin {
         }
         
         volumeHandler.stopHandler()
+        // 🔴 FORK CHANGE -- upstream leaves handlerBlock installed after a clear.
+        volumeHandler.handlerBlock = nil
         call.resolve()
     }
 
@@ -157,7 +177,11 @@ public class VolumeControlHandler: NSObject {
     
     override public init() {
         appIsActive = true
-        sessionCategory = AVAudioSession.Category.playback.rawValue
+        // 🔴 FORK CHANGE -- upstream hardcodes `.playback`, which is OUTPUT-ONLY: WebKit
+        // refuses/kills an active getUserMedia capture route under it, so a live agent loses
+        // its microphone the moment the volume observer starts. `.ambient` is the least
+        // invasive category that still permits observation and does not tear down recording.
+        sessionCategory = AVAudioSession.Category.ambient.rawValue
         sessionOptions = AVAudioSession.CategoryOptions.mixWithOthers
         
         volumeView = MPVolumeView(
@@ -208,7 +232,8 @@ public class VolumeControlHandler: NSObject {
         setInitialVolume()
         do {
             try session?.setCategory(AVAudioSession.Category(rawValue: sessionCategory), options: sessionOptions!)
-            try session?.setActive(true)
+            // 🔴 FORK CHANGE -- upstream calls `setActive(true)` here. Activating the shared
+            // session merely to OBSERVE volume can steal/reshape the route from a live agent.
         } catch {
             print("Error setupSession: \(error)")
         }
