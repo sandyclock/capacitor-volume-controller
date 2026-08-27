@@ -1,6 +1,6 @@
 {
   "name": "capacitor-volume-controller",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Capacitor plugin for advanced volume control with native Android and iOS implementations",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -73,12 +73,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/sandyclock/capacitor-volume-control.git"
+    "url": "https://github.com/sandyclock/capacitor-volume-controller.git"
   },
   "bugs": {
-    "url": "https://github.com/sandyclock/capacitor-volume-control/issues"
+    "url": "https://github.com/sandyclock/capacitor-volume-controller/issues"
   },
-  "homepage": "https://github.com/sandyclock/capacitor-volume-control#readme",
+  "homepage": "https://github.com/sandyclock/capacitor-volume-controller#readme",
   "capacitor": {
     "ios": {
       "src": "ios"

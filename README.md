@@ -22,6 +22,75 @@ A Capacitor plugin for advanced volume control with native Android and iOS imple
 
 ---
 
+## ⚠️ Android: your launcher Activity must let the volume keys through
+
+`setVolumeControlStream()` routes the volume keys to a chosen stream — but only if the keys
+**reach the window in the first place**. Many kiosk / lockdown / MDM apps override
+`onKeyDown` or `dispatchKeyEvent` on their launcher Activity and swallow every key. If yours
+does, this plugin appears to do nothing, and the failure is silent.
+
+There are **two independent requirements**, and you need both:
+
+| # | Requirement | Owned by |
+|---|---|---|
+| 1 | The Activity must **not consume** `KEYCODE_VOLUME_UP` (24) / `KEYCODE_VOLUME_DOWN` (25) | **your app** |
+| 2 | The keys must be routed to the stream you care about | this plugin's `setVolumeControlStream()` |
+
+### Measured on a Samsung SM-X210 (Android 16), volume keys injected via `adb shell input keyevent 24`
+
+| Configuration | `STREAM_VOICE_CALL` | `STREAM_MUSIC` |
+|---|---|---|
+| Activity swallows keys (default for many kiosk apps) | 11 → 11 | 12 → 12 |
+| Keys allowed through, **no** `setVolumeControlStream` | 11 → 11 | **12 → 14** |
+| Keys allowed through **+** `setVolumeControlStream('voice_call')` | **11 → 15** | 14 → 14 |
+
+Without requirement 1 nothing moves at all. With requirement 1 but not 2, the keys move the
+**default** stream (usually `STREAM_MUSIC`) — which is the wrong one if your audio is playing
+on the voice-call route (a WebRTC / voice-agent app in `MODE_IN_COMMUNICATION`).
+
+### What to do in your Activity
+
+A standard `MainActivity` (`BridgeActivity`) already does the right thing — it does not
+override `onKeyDown`, so the keys fall through to `PhoneWindow` and this plugin works with no
+app-side change.
+
+If you use a **custom kiosk Activity**, return `false` ("not handled") for the two volume
+keycodes so they fall through to `PhoneWindow.onKeyDown`, which is what actually applies the
+stream selected by `setVolumeControlStream()`:
+
+```java
+@Override
+public boolean onKeyDown(int keyCode, KeyEvent event) {
+    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+        return false;   // let the system handle it -> honours setVolumeControlStream()
+    }
+    // ... your existing lockdown handling for other keys
+    return true;
+}
+```
+
+⚠️ **Returning `true` consumes the key.** Do not "handle" volume yourself and also call
+`setVolumeControlStream()` — you will get either double-stepping or nothing.
+
+Some kiosk plugins expose an allow-list instead (e.g. a `setAllowedKeys([24, 25])` call).
+Either approach works; the requirement is only that the Activity stops consuming the keys.
+
+### Then bind the stream
+
+```ts
+import { VolumeControl } from 'capacitor-volume-controller';
+
+// at session start, once the Activity lets the keys through
+await VolumeControl.setVolumeControlStream({ type: 'voice_call' });
+
+// on teardown
+await VolumeControl.clearVolumeControlStream();
+```
+
+The binding lives on the **Activity**, so it does not survive process death — re-bind from JS
+at session start. On iOS both calls are resolving no-ops, so you can call them unconditionally
+without platform branching.
+
 ## ⚠️ Migration Notice
 
 **v2.0+ Breaking Change:**
