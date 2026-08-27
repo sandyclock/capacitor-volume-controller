@@ -57,28 +57,39 @@ its own, which killed the buttons outright: nothing adjusted the volume at all.)
 `value` field, call `setVolumeControlStream()` first. Note also that the binding lives on the
 Activity, so it does **not** survive process death — re-bind from JS at session start.
 
-### 3. iOS — the audio session is not hijacked
+### 3. iOS — we track upstream's audio session handling (this section was WRONG)
 
-Upstream, and `@capacitor-community/volume-buttons` which upstream copied, hardcode
-`AVAudioSession.Category.playback` in `setupSession()` and call `setActive(true)`.
+🔴 **An earlier revision of this file claimed we diverged from upstream here. That claim was
+based on two unmeasured assumptions, both of which were later falsified on real hardware
+(iPhone 13 Pro / iOS 26.6). The divergence has been REMOVED. Do not reintroduce it.**
 
-`.playback` is **output-only**, and WebKit refuses `getUserMedia` while the session sits in
-it. Calling `watchVolume()` during a live microphone session therefore **kills the
-microphone**. This plugin only needs to observe `outputVolume`; it has no business owning
-the route.
+**Falsified claim 1 — "`.playback` is output-only, so WebKit refuses `getUserMedia` and
+`watchVolume()` kills the microphone."** Measured false. Built with
+`sessionCategory = .playback`, `getUserMedia` **acquired** the mic and it stayed
+`readyState=live muted=false` for the life of the test. We now use `.playback`, matching
+upstream. If anyone changes this back to `.ambient`, justify it by **silent-switch
+semantics** — `.ambient` obeys the mute switch, `.playback` plays through it, which is a
+real product question for a table kiosk — and **never** by the microphone.
 
-We use `.ambient` and do not call `setActive(true)` — KVO on `outputVolume` does not
-require an active session. Upstream 2.0.x went further and added `setActive(true)` to
-`getVolumeLevel()`, so that every volume *read* activates the session. Deliberately not
-adopted.
+**Falsified claim 2 — "KVO on `outputVolume` does not require an active session, so we can
+skip `setActive(true)`."** Measured false, and it silently broke the feature. On an
+**inactive** session the observer does not fire **at all** — not filtered, never fired. The
+plugin only appeared to work after an accidental background→foreground cycle, which
+activates the session via `applicationDidChangeActive`. `setActive(true)` has been restored
+in `setupSession()` and is load-bearing. Removing it "to protect the mic" is backwards:
+activation never threatened the mic.
 
-⚠️ **Known residual hazard, not yet addressed.** `setupSession()` still calls `setCategory`
-at all, and the interruption handler and `applicationDidChangeActive` still call
-`setActive(true)`. Both are inherited. Reviewers noted that the strictly safest form is to
-call `setCategory` **not at all** and observe whatever session the host app has already
-activated. That change is unmade because none of this iOS code is compiled or device-tested
-here, and our own product never calls `watchVolume` on iOS. **If you do call it on iOS
-during a live microphone session, treat that as untested territory.**
+We still do **not** copy upstream's `setActive(true)` inside `getVolumeLevel()`, on the
+narrower ground that a plain read should not mutate global session state.
+
+🔴 **Real, structural iOS limitation — this one IS measured.** While a capture route is live
+(the agent listening), `outputVolume` KVO **stops firing entirely** and `getVolumeLevel()`
+can return **stale** values. This is **not** a fork bug — upstream behaves identically. It
+follows that on iOS **hardware volume buttons cannot be observed by this plugin during an
+agent session**, and any design that assumes otherwise is invalid. SecuCred's iOS path is
+therefore gain-node only during a live session (see `DESIGN_ai_agent_volume_control.md`
+§4.2); the hardware buttons still change what the user *hears*, we simply cannot observe or
+mirror them.
 
 ### 4. `@capacitor-community/volume-buttons` is not a dependency
 

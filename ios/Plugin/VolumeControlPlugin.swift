@@ -26,9 +26,10 @@ public class VolumeControlPlugin: CAPPlugin {
     
     @objc func getVolumeLevel(_ call: CAPPluginCall) {
         do {
-            // 🔴 FORK CHANGE -- upstream 2.0.3 calls `setActive(true)` here. Activating the
-            // SHARED AVAudioSession from a plain READ is route-hostile: it can tear down a
-            // live capture route mid-agent. outputVolume is readable without it.
+            // FORK CHANGE -- upstream 2.0.3 calls `setActive(true)` here too. We do NOT, on
+            // the narrower ground that a plain READ should not mutate global session state.
+            // NOTE (C-18.37): while a capture route is live this read can return a STALE value
+            // regardless -- do not treat getVolumeLevel as authoritative during an agent session.
             let volume = AVAudioSession.sharedInstance().outputVolume
             let roundedVolume = round(volume * 100) / 100
             call.resolve(["value": roundedVolume])
@@ -177,11 +178,13 @@ public class VolumeControlHandler: NSObject {
     
     override public init() {
         appIsActive = true
-        // 🔴 FORK CHANGE -- upstream hardcodes `.playback`, which is OUTPUT-ONLY: WebKit
-        // refuses/kills an active getUserMedia capture route under it, so a live agent loses
-        // its microphone the moment the volume observer starts. `.ambient` is the least
-        // invasive category that still permits observation and does not tear down recording.
-        sessionCategory = AVAudioSession.Category.ambient.rawValue
+        // Matches upstream. An earlier fork revision used `.ambient` on the theory that
+        // `.playback` is output-only and would kill a live getUserMedia capture route.
+        // 🔴 THAT WAS MEASURED FALSE (C-18.37, iPhone 13 Pro / iOS 26.6): under `.playback`
+        // getUserMedia acquired the mic and it stayed `readyState=live muted=false`.
+        // If this is ever changed back to `.ambient`, justify it by SILENT-SWITCH semantics
+        // (`.ambient` obeys the mute switch, `.playback` plays through it) -- never by the mic.
+        sessionCategory = AVAudioSession.Category.playback.rawValue
         sessionOptions = AVAudioSession.CategoryOptions.mixWithOthers
         
         volumeView = MPVolumeView(
@@ -232,8 +235,14 @@ public class VolumeControlHandler: NSObject {
         setInitialVolume()
         do {
             try session?.setCategory(AVAudioSession.Category(rawValue: sessionCategory), options: sessionOptions!)
-            // 🔴 FORK CHANGE -- upstream calls `setActive(true)` here. Activating the shared
-            // session merely to OBSERVE volume can steal/reshape the route from a live agent.
+            // 🔴 REQUIRED -- do not remove. `outputVolume` KVO does NOT fire on an INACTIVE
+            // session: with this line absent the observer never fires at all, and the feature
+            // only appears to work after an accidental background->foreground cycle (which
+            // activates the session via `applicationDidChangeActive`). Measured in C-18.37.
+            // An earlier fork revision removed this to "protect the agent's mic route"; that
+            // was backwards -- activation never threatened the mic; a LIVE MIC kills the
+            // volume observation, which no amount of not-activating can fix.
+            try session?.setActive(true)
         } catch {
             print("Error setupSession: \(error)")
         }
