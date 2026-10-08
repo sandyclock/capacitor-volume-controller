@@ -36,7 +36,7 @@ There are **two independent requirements**, and you need both:
 | 1 | The Activity must **not consume** `KEYCODE_VOLUME_UP` (24) / `KEYCODE_VOLUME_DOWN` (25) | **your app** |
 | 2 | The keys must be routed to the stream you care about | this plugin's `setVolumeControlStream()` |
 
-### Measured on a Samsung SM-X210 (Android 16), volume keys injected via `adb shell input keyevent 24`
+### Measured on a Samsung tablet (Android 16), volume keys injected via `adb shell input keyevent 24`
 
 | Configuration | `STREAM_VOICE_CALL` | `STREAM_MUSIC` |
 |---|---|---|

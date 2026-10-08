@@ -11,5 +11,6 @@ CAP_PLUGIN(VolumeControlPlugin, "VolumeControl",
            CAP_PLUGIN_METHOD(isWatching, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(setVolumeControlStream, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(clearVolumeControlStream, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(getAudioEnvironment, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(removeAllListeners, CAPPluginReturnPromise);
 )

@@ -9,7 +9,8 @@ import type {
   WatchVolumeOptions, 
   WatchStatusResult,
   VolumeButtonPressedEvent,
-  VolumeLevelChangedEvent
+  VolumeLevelChangedEvent,
+  AudioEnvironmentResult
 } from './definitions';
 
 export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
@@ -112,5 +113,13 @@ export class VolumeControlWeb extends WebPlugin implements VolumeControlPlugin {
   /** 🔑 FORK ADDITION. See `setVolumeControlStream` -- no-op on web. */
   async clearVolumeControlStream(): Promise<void> {
     return;
+  }
+
+  /** 🔑 FORK ADDITION. A browser exposes none of these facts. */
+  async getAudioEnvironment(): Promise<AudioEnvironmentResult> {
+    return {
+      platform: 'web', echoCancellerAvailable: null, buildType: null, manufacturer: null,
+      model: null, audioMode: null, musicMaxSteps: null, voiceCallMaxSteps: null,
+    };
   }
 }

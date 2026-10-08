@@ -111,9 +111,37 @@ export interface WatchStatusResult {
   value: boolean;
 }
 
+export interface AudioEnvironmentResult {
+  /** `android`, `ios` or `web`. Only Android fills the fields below; elsewhere they are null. */
+  platform: 'android' | 'ios' | 'web';
+  /**
+   * Android: `AcousticEchoCanceler.isAvailable()`. A hint, not proof -- some devices cancel
+   * echo inside the audio driver and still report `false`.
+   */
+  echoCancellerAvailable: boolean | null;
+  /** Android: `Build.TYPE` -- `user`, `userdebug` or `eng`. */
+  buildType: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  /**
+   * Android: the current `AudioManager` mode. `in_communication` while a WebView holds the
+   * microphone with echo cancellation means playback runs on `VOICE_CALL`, not `MUSIC`.
+   */
+  audioMode: 'normal' | 'ringtone' | 'in_call' | 'in_communication' | 'call_screening' | 'other' | null;
+  /** Android: number of volume steps of `STREAM_MUSIC`. */
+  musicMaxSteps: number | null;
+  /** Android: number of volume steps of `STREAM_VOICE_CALL`. */
+  voiceCallMaxSteps: number | null;
+}
+
 export interface VolumeControlPlugin {
   /**
    * Get current volume level
+   *
+   * On iOS, `type: VolumeType.VOICE_CALL` reads the separate voice-call volume (what plays while
+   * the app records with voice processing) by briefly switching the app's audio session to voice
+   * chat. Call it only while nothing is recording: re-configuring the session during a capture can
+   * take the microphone away. Any other type reads the current output volume.
    * @param options Volume options
    * @returns Promise resolving to current volume level
    * @since 1.0.0
@@ -219,4 +247,16 @@ export interface VolumeControlPlugin {
    * @since 2.1.0
    */
   clearVolumeControlStream(): Promise<void>;
+
+  /**
+   * 🔑 FORK ADDITION (no upstream counterpart). Read-only. Android fills every field;
+   * iOS and web return `platform` with the rest `null`.
+   *
+   * What an app needs to choose its audio path and the stream to control: whether the
+   * platform offers an echo canceller, the build type, the current audio mode, and the
+   * step counts of the music and voice-call streams.
+   *
+   * @since 2.2.0
+   */
+  getAudioEnvironment(): Promise<AudioEnvironmentResult>;
 }

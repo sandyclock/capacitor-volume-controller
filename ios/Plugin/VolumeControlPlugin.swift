@@ -25,10 +25,14 @@ public class VolumeControlPlugin: CAPPlugin {
     }
     
     @objc func getVolumeLevel(_ call: CAPPluginCall) {
+        if call.getString("type") == "voice_call" {
+            readVoiceCallVolume(call)
+            return
+        }
         do {
             // FORK CHANGE -- upstream 2.0.3 calls `setActive(true)` here too. We do NOT, on
             // the narrower ground that a plain READ should not mutate global session state.
-            // NOTE (C-18.37): while a capture route is live this read can return a STALE value
+            // NOTE: while a capture route is live this read can return a STALE value
             // regardless -- do not treat getVolumeLevel as authoritative during an agent session.
             let volume = AVAudioSession.sharedInstance().outputVolume
             let roundedVolume = round(volume * 100) / 100
@@ -38,6 +42,40 @@ public class VolumeControlPlugin: CAPPlugin {
         }
     }
     
+    /// FORK ADDITION -- `getVolumeLevel({ type: 'voice_call' })` on iOS.
+    ///
+    /// iOS keeps a separate volume for voice-call audio, which is what plays while any part of the
+    /// app (a web view's getUserMedia included) records with voice processing. `outputVolume`
+    /// reports it only while THIS app's own session is in that mode, so the read enters it briefly:
+    /// playAndRecord / voiceChat, mixing with others, activate, wait for the value to settle, read,
+    /// then deactivate and restore the previous category.
+    ///
+    /// 🔴 Call it only while nothing is recording. Measured on an iPad (iOS 18): re-configuring
+    /// the session while a web view held the microphone took the microphone away from the page.
+    private func readVoiceCallVolume(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let session = AVAudioSession.sharedInstance()
+            let category = session.category, mode = session.mode, options = session.categoryOptions
+            let restore = {
+                do { try session.setActive(false, options: .notifyOthersOnDeactivation) } catch { print("readVoiceCallVolume deactivate: \(error)") }
+                do { try session.setCategory(category, mode: mode, options: options) } catch { print("readVoiceCallVolume restore: \(error)") }
+            }
+            do {
+                try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.mixWithOthers, .defaultToSpeaker])
+                try session.setActive(true)
+            } catch {
+                restore()
+                call.reject("Failed to read the voice-call volume: \(error.localizedDescription)")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                let volume = session.outputVolume
+                restore()
+                call.resolve(["value": round(volume * 100) / 100])
+            }
+        }
+    }
+
     @objc func setVolumeLevel(_ call: CAPPluginCall) {
         guard let value = call.getFloat("value") else {
             call.reject("Missing required parameter: value")
@@ -114,6 +152,16 @@ public class VolumeControlPlugin: CAPPlugin {
         call.resolve()
     }
 
+    /// 🔑 FORK ADDITION. The facts it reports are Android concepts; iOS answers with its
+    /// platform and nulls so callers need no platform branching.
+    @objc func getAudioEnvironment(_ call: CAPPluginCall) {
+        call.resolve([
+            "platform": "ios",
+            "echoCancellerAvailable": NSNull(), "buildType": NSNull(), "manufacturer": NSNull(),
+            "model": NSNull(), "audioMode": NSNull(), "musicMaxSteps": NSNull(), "voiceCallMaxSteps": NSNull()
+        ])
+    }
+
     @objc func clearWatch(_ call: CAPPluginCall) {
         guard volumeHandler.isStarted else {
             call.reject("Volume buttons has not been watched")
@@ -180,7 +228,7 @@ public class VolumeControlHandler: NSObject {
         appIsActive = true
         // Matches upstream. An earlier fork revision used `.ambient` on the theory that
         // `.playback` is output-only and would kill a live getUserMedia capture route.
-        // 🔴 THAT WAS MEASURED FALSE (C-18.37, iPhone 13 Pro / iOS 26.6): under `.playback`
+        // 🔴 THAT WAS MEASURED FALSE (measured on an iPhone, iOS 26): under `.playback`
         // getUserMedia acquired the mic and it stayed `readyState=live muted=false`.
         // If this is ever changed back to `.ambient`, justify it by SILENT-SWITCH semantics
         // (`.ambient` obeys the mute switch, `.playback` plays through it) -- never by the mic.
@@ -238,7 +286,7 @@ public class VolumeControlHandler: NSObject {
             // 🔴 REQUIRED -- do not remove. `outputVolume` KVO does NOT fire on an INACTIVE
             // session: with this line absent the observer never fires at all, and the feature
             // only appears to work after an accidental background->foreground cycle (which
-            // activates the session via `applicationDidChangeActive`). Measured in C-18.37.
+            // activates the session via `applicationDidChangeActive`). Measured on device.
             // An earlier fork revision removed this to "protect the agent's mic route"; that
             // was backwards -- activation never threatened the mic; a LIVE MIC kills the
             // volume observation, which no amount of not-activating can fix.

@@ -134,10 +134,9 @@ adb shell dumpsys audio | grep -iE 'mode|stream|volume' | head -40
 # then press a hardware volume button and confirm the HUD names the CALL stream, not media
 ```
 
-⚠️ On our kiosk this will still fail until `KioskActivity` stops swallowing keys:
-`onKeyDown` returns `!allowedKeys.contains(keyCode)` with `allowedKeys` empty and **no
-`super.onKeyDown` call**, so no key ever reaches default handling. That is an app-side fix,
-not a plugin one.
+⚠️ In an app whose custom kiosk Activity swallows keys this will still fail: if `onKeyDown`
+returns `true` for every key and never calls `super.onKeyDown`, no key ever reaches default
+handling. That is an app-side fix, not a plugin one.
 
 ⚠️ `AudioManager.isVolumeFixed()` devices refuse volume writes outright; `set.roundTrip` will
 fail there and that is the device, not the plugin.

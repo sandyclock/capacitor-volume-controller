@@ -57,11 +57,20 @@ its own, which killed the buttons outright: nothing adjusted the volume at all.)
 `value` field, call `setVolumeControlStream()` first. Note also that the binding lives on the
 Activity, so it does **not** survive process death — re-bind from JS at session start.
 
+### 2a. `getAudioEnvironment()` (new, 2.2.0)
+
+No upstream equivalent. Read-only facts an app needs to choose how to play voice audio and which
+stream to control: echo canceller reported, build type, the current audio mode, and stream step
+counts. Measured on five Android boards: a WebView that opens the microphone with echo cancellation
+switches to `in_communication` on devices with a working canceller, and its playback then runs on
+`STREAM_VOICE_CALL`; elsewhere it stays `normal` on `STREAM_MUSIC`. `echoCancellerAvailable` is a
+hint, not proof — some devices cancel echo inside the audio driver and report `false`.
+
 ### 3. iOS — we track upstream's audio session handling (this section was WRONG)
 
 🔴 **An earlier revision of this file claimed we diverged from upstream here. That claim was
 based on two unmeasured assumptions, both of which were later falsified on real hardware
-(iPhone 13 Pro / iOS 26.6). The divergence has been REMOVED. Do not reintroduce it.**
+(an iPhone, iOS 26). The divergence has been REMOVED. Do not reintroduce it.**
 
 **Falsified claim 1 — "`.playback` is output-only, so WebKit refuses `getUserMedia` and
 `watchVolume()` kills the microphone."** Measured false. Built with
@@ -69,7 +78,7 @@ based on two unmeasured assumptions, both of which were later falsified on real 
 `readyState=live muted=false` for the life of the test. We now use `.playback`, matching
 upstream. If anyone changes this back to `.ambient`, justify it by **silent-switch
 semantics** — `.ambient` obeys the mute switch, `.playback` plays through it, which is a
-real product question for a table kiosk — and **never** by the microphone.
+real product question for a kiosk — and **never** by the microphone.
 
 **Falsified claim 2 — "KVO on `outputVolume` does not require an active session, so we can
 skip `setActive(true)`."** Measured false, and it silently broke the feature. On an
@@ -86,10 +95,9 @@ narrower ground that a plain read should not mutate global session state.
 (the agent listening), `outputVolume` KVO **stops firing entirely** and `getVolumeLevel()`
 can return **stale** values. This is **not** a fork bug — upstream behaves identically. It
 follows that on iOS **hardware volume buttons cannot be observed by this plugin during an
-agent session**, and any design that assumes otherwise is invalid. SecuCred's iOS path is
-therefore gain-node only during a live session (see `DESIGN_ai_agent_volume_control.md`
-§4.2); the hardware buttons still change what the user *hears*, we simply cannot observe or
-mirror them.
+agent session**, and any design that assumes otherwise is invalid. An app that needs volume
+control during a live session must do it in its own audio graph (e.g. a gain node); the hardware
+buttons still change what the user *hears*, the plugin simply cannot observe or mirror them.
 
 ### 4. `@capacitor-community/volume-buttons` is not a dependency
 

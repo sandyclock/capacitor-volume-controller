@@ -1,6 +1,6 @@
 {
   "name": "capacitor-volume-controller",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Capacitor plugin for advanced volume control with native Android and iOS implementations",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",

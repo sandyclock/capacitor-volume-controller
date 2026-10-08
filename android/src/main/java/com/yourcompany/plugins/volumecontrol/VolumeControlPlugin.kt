@@ -2,6 +2,8 @@ package com.yourcompany.plugins.volumecontrol
 
 import android.content.Context
 import android.media.AudioManager
+import android.media.audiofx.AcousticEchoCanceler
+import android.os.Build
 import android.view.KeyEvent
 import android.view.View
 import com.getcapacitor.JSObject
@@ -198,6 +200,48 @@ class VolumeControlPlugin : Plugin() {
             call.resolve()
         } catch (e: Exception) {
             call.reject("Failed to clear volume control stream", e)
+        }
+    }
+
+    private fun audioModeName(mode: Int): String {
+        return when (mode) {
+            AudioManager.MODE_NORMAL -> "normal"
+            AudioManager.MODE_RINGTONE -> "ringtone"
+            AudioManager.MODE_IN_CALL -> "in_call"
+            AudioManager.MODE_IN_COMMUNICATION -> "in_communication"
+            else -> if (Build.VERSION.SDK_INT >= 30 && mode == AudioManager.MODE_CALL_SCREENING) "call_screening" else "other"
+        }
+    }
+
+    /**
+     * 🔑 FORK ADDITION. Read-only facts an app needs to choose its audio path and the
+     * stream to control. Nothing is changed.
+     *
+     * - `echoCancellerAvailable`: `AcousticEchoCanceler.isAvailable()` -- whether the platform
+     *   offers an echo-canceller effect. Some devices cancel echo inside the audio driver and
+     *   report `false` here; treat it as a hint, not proof.
+     * - `buildType`: `Build.TYPE` (`user`, `userdebug`, `eng`).
+     * - `audioMode`: the CURRENT `AudioManager` mode. A WebView that opens the microphone
+     *   with echo cancellation may switch to `in_communication`, and its playback then
+     *   runs on `STREAM_VOICE_CALL` instead of `STREAM_MUSIC`. Read it while the
+     *   microphone is open if you need to know which stream your audio plays on.
+     * - `musicMaxSteps` / `voiceCallMaxSteps`: `getStreamMaxVolume` for the two streams.
+     */
+    @PluginMethod
+    fun getAudioEnvironment(call: PluginCall) {
+        try {
+            val ret = JSObject()
+            ret.put("platform", "android")
+            ret.put("echoCancellerAvailable", AcousticEchoCanceler.isAvailable())
+            ret.put("buildType", Build.TYPE)
+            ret.put("manufacturer", Build.MANUFACTURER)
+            ret.put("model", Build.MODEL)
+            ret.put("audioMode", audioModeName(audioManager.mode))
+            ret.put("musicMaxSteps", audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+            ret.put("voiceCallMaxSteps", audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL))
+            call.resolve(ret)
+        } catch (e: Exception) {
+            call.reject("Failed to read the audio environment", e)
         }
     }
 

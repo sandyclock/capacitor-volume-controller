@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - unreleased
+
+### Added
+- `getAudioEnvironment()` (fork addition, read-only): Android reports whether the platform offers an
+  echo canceller (`AcousticEchoCanceler.isAvailable()`), `Build.TYPE`, manufacturer, model, the current
+  audio mode, and the step counts of the music and voice-call streams. iOS and web return their
+  platform with the other fields `null`.
+- iOS: `getVolumeLevel({ type: VolumeType.VOICE_CALL })` reads the separate voice-call volume (what plays
+  while the app records with voice processing) by briefly switching the app's audio session to voice chat
+  and back. Call it only while nothing is recording: changing the session during a capture can take the
+  microphone away.
+
+### Changed
+- Documentation: removed references specific to one app.
+
 ## [2.0.0] - 2025-11-08
 
 ### Breaking Changes
